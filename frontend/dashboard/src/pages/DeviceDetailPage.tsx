@@ -143,7 +143,7 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
   const { points, loading: histLoading } = useTelemetryHistory(id, timeRange);
   const { events, loading: evtLoading }  = useDeviceEvents(id, "7d", 50);
   const { send, sending } = useCommand();
-  const { patchDevice, setMode, loading: patching } = usePatchDevice();
+  const { sendConfig, setMode, loading: patching } = usePatchDevice();
 
   // Tarif tersimpan (dari Settings) untuk estimasi biaya — sinkron dengan golongan.
   const tariffId = useSettingsStore((s) => s.saved.tariffId);
@@ -336,11 +336,23 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
   const handleSaveConfig = async () => {
     if (!id) return;
     setSaveMsg(null);
-    const ok = await patchDevice(id, {
-      power_threshold_w: threshold,
-      pir_timeout_sec:   pirTimeout,
+    // Clamp ke rentang yang divalidasi API (thr 0–5000 W, pir 30–7200 dtk integer)
+    // agar input ketik yang di luar batas tidak memicu error 400.
+    const safeThreshold = Math.min(5000, Math.max(0, Number(threshold) || 0));
+    const safePir = Math.min(7200, Math.max(30, Math.round(Number(pirTimeout) || 30)));
+    // sendConfig → POST /config: kirim config_update ke ESP32 (via MQTT) +
+    // simpan ke registry. (patchDevice lama hanya update registry, device tak tahu.)
+    const ok = await sendConfig(id, {
+      power_threshold_w: safeThreshold,
+      pir_timeout_sec:   safePir,
     });
-    setSaveMsg(ok ? "Konfigurasi tersimpan!" : "Gagal menyimpan konfigurasi.");
+    setThreshold(safeThreshold);
+    setPirTimeout(safePir);
+    setSaveMsg(
+      ok
+        ? "Konfigurasi terkirim ke perangkat!"
+        : "Gagal mengirim konfigurasi ke perangkat.",
+    );
     setConfigDirty(false);
     setTimeout(() => setSaveMsg(null), 3000);
   };
@@ -712,7 +724,21 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
                     Threshold Standby
                   </span>
                   <span className="vg-detail-config__field-val">
-                    {threshold} W
+                    <input
+                      type="number"
+                      className="vg-detail-config__val-input"
+                      min={0}
+                      max={5000}
+                      step={1}
+                      value={threshold}
+                      onChange={(e) => {
+                        setThreshold(Number(e.target.value));
+                        setConfigDirty(true);
+                      }}
+                      disabled={isOffline}
+                      aria-label="Threshold standby dalam Watt (bisa diketik)"
+                    />
+                    <span className="vg-detail-config__val-unit">W</span>
                   </span>
                 </div>
                 <input
@@ -738,7 +764,23 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
               <div className="vg-detail-config__field">
                 <div className="vg-detail-config__field-header">
                   <span className="vg-detail-config__label">PIR Timeout</span>
-                  <span className="vg-detail-config__field-val">{pirLabel}</span>
+                  <span className="vg-detail-config__field-val">
+                    <input
+                      type="number"
+                      className="vg-detail-config__val-input"
+                      min={30}
+                      max={7200}
+                      step={1}
+                      value={pirTimeout}
+                      onChange={(e) => {
+                        setPirTimeout(Number(e.target.value));
+                        setConfigDirty(true);
+                      }}
+                      disabled={isOffline}
+                      aria-label="PIR timeout dalam detik (bisa diketik)"
+                    />
+                    <span className="vg-detail-config__val-unit">dtk ({pirLabel})</span>
+                  </span>
                 </div>
                 <input
                   type="range"

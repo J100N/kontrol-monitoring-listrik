@@ -499,6 +499,38 @@
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-bold);
   color: var(--brand-blue-600);
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+/* Input nilai yang bisa diketik (Watt / detik) — pengganti badge statis */
+.vg-detail-config__val-input {
+  width: 64px;
+  text-align: right;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+  color: var(--brand-blue-600);
+  background: var(--slate-100, #f1f5f9);
+  border: 1px solid var(--slate-300, #cbd5e1);
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+
+.vg-detail-config__val-input:focus {
+  outline: none;
+  border-color: var(--brand-blue-500);
+  box-shadow: 0 0 0 2px rgba(31, 122, 214, 0.2);
+}
+
+.vg-detail-config__val-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.vg-detail-config__val-unit {
+  font-size: var(--font-size-xs);
+  color: var(--text-soft);
 }
 
 .vg-detail-config__field-limits {
