@@ -90,9 +90,10 @@ static void ascon_ctr_nvs_maybe_save(uint64_t current)
  * sebagai centi-watt (watt*100) supaya muat di nvs_set_u32.
  * ============================================================= */
 
-#define AUTOCFG_NVS_NS  "autocfg"   // namespace NVS untuk konfig auto-control
-#define AUTOCFG_KEY_PIR "pir_sec"   // timeout PIR (detik)
-#define AUTOCFG_KEY_THR "thr_cw"    // threshold daya (centi-watt = watt*100)
+#define AUTOCFG_NVS_NS   "autocfg"   // namespace NVS untuk konfig auto-control
+#define AUTOCFG_KEY_PIR  "pir_sec"   // timeout PIR (detik)
+#define AUTOCFG_KEY_THR  "thr_cw"    // threshold daya (centi-watt = watt*100)
+#define AUTOCFG_KEY_MODE "mode"      // mode kerja (0=manual, 1=automatic)
 
 // Baca konfig dari NVS bila ada; bila tidak, *_io tidak diubah (pakai default).
 static void autocfg_nvs_load(uint32_t *pir_sec_io, float *thr_w_io)
@@ -110,6 +111,35 @@ static void autocfg_nvs_load(uint32_t *pir_sec_io, float *thr_w_io)
         *thr_w_io = (float)thr_cw / 100.0f;
     }
     nvs_close(h);
+}
+
+// Baca mode kerja terakhir dari NVS. Bila belum pernah tersimpan, *mode_io
+// tidak diubah (dipertahankan default pemanggil). Mengembalikan mode terakhir
+// yang dipilih user agar tetap konsisten setelah device reboot.
+static void autocfg_nvs_load_mode(device_work_mode_t *mode_io)
+{
+    nvs_handle_t h;
+    if (nvs_open(AUTOCFG_NVS_NS, NVS_READONLY, &h) != ESP_OK) {
+        return;
+    }
+    uint32_t mode = 0;
+    if (nvs_get_u32(h, AUTOCFG_KEY_MODE, &mode) == ESP_OK) {
+        *mode_io = (mode == (uint32_t)DEVICE_WORK_MODE_AUTOMATIC)
+                       ? DEVICE_WORK_MODE_AUTOMATIC
+                       : DEVICE_WORK_MODE_MANUAL;
+    }
+    nvs_close(h);
+}
+
+// Simpan mode kerja ke NVS agar bertahan setelah reboot (sinkron dgn dashboard).
+static void autocfg_nvs_save_mode(device_work_mode_t mode)
+{
+    nvs_handle_t h;
+    if (nvs_open(AUTOCFG_NVS_NS, NVS_READWRITE, &h) == ESP_OK) {
+        nvs_set_u32(h, AUTOCFG_KEY_MODE, (uint32_t)mode);
+        nvs_commit(h);
+        nvs_close(h);
+    }
 }
 
 // Simpan konfig auto-control ke NVS.
@@ -449,17 +479,20 @@ static void mqtt_command_callback(const char *topic, const uint8_t *payload, siz
         if (device_state_is_initialized()) {
             device_state_set_mode(DEVICE_WORK_MODE_MANUAL);
         }
+        autocfg_nvs_save_mode(DEVICE_WORK_MODE_MANUAL);
     } else if (strcmp(cmd, "mode_auto") == 0) {
         // Aktifkan mode otomatis: auto-control yang mengelola relay.
         if (device_state_is_initialized()) {
             device_state_set_mode(DEVICE_WORK_MODE_AUTOMATIC);
         }
+        autocfg_nvs_save_mode(DEVICE_WORK_MODE_AUTOMATIC);
         ack_msg = "mode otomatis aktif";
     } else if (strcmp(cmd, "mode_manual") == 0) {
         // Aktifkan mode manual: auto-control berhenti, kendali penuh user.
         if (device_state_is_initialized()) {
             device_state_set_mode(DEVICE_WORK_MODE_MANUAL);
         }
+        autocfg_nvs_save_mode(DEVICE_WORK_MODE_MANUAL);
         ack_msg = "mode manual aktif";
     } else if (strncmp(cmd, "config_update", 13) == 0) {
         // Perbarui parameter auto-control dari dashboard.
@@ -536,7 +569,13 @@ void app_main(void)
 
     ESP_ERROR_CHECK(device_state_init());
     ESP_ERROR_CHECK(device_state_set_device_online(true));
-    ESP_ERROR_CHECK(device_state_set_mode(DEVICE_WORK_MODE_AUTOMATIC));
+    // Pulihkan mode kerja terakhir dari NVS agar tetap sinkron dgn pilihan user
+    // di dashboard setelah device reboot. Default saat first-boot = AUTOMATIC.
+    device_work_mode_t boot_mode = DEVICE_WORK_MODE_AUTOMATIC;
+    autocfg_nvs_load_mode(&boot_mode);
+    ESP_ERROR_CHECK(device_state_set_mode(boot_mode));
+    ESP_LOGI(TAG, "[%s] Mode kerja saat boot: %s", DEVICE_ID,
+             device_state_mode_to_string(boot_mode));
 
     esp_err_t oled_ret = oled_init(NULL);
     if (oled_ret != ESP_OK) {
@@ -557,6 +596,14 @@ void app_main(void)
             refresh_oled_from_state();
         }
     }
+
+    // Mitigasi brownout saat perangkat pertama dicolok ke listrik: beri jeda
+    // singkat agar rail 5V & regulator stabil (kapasitor bulk terisi) sebelum
+    // koil relay menarik arus inrush. Tanpa jeda ini, inrush relay saat boot
+    // dapat menjatuhkan tegangan → brownout reset → device reboot berulang
+    // (gejala relay klik on/off terus "seperti ngehang"). Catatan: bila catu
+    // daya memang kurang kuat, jeda ini hanya mengurangi, bukan menghilangkan.
+    vTaskDelay(pdMS_TO_TICKS(1500));
 
     // Relay otomatis nyala saat init (default_on=true) supaya PZEM langsung dapat arus.
     ESP_ERROR_CHECK(relay_init(NULL));

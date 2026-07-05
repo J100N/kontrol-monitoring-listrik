@@ -34,7 +34,7 @@
 // Parameter kontrol otomatis:
 // - Auto OFF hanya jika no-motion kontinu >= 10 menit (600 detik)
 // - dan daya < 10 watt.
-#define AUTO_CONTROL_NO_MOTION_OFF_SEC 60U
+#define AUTO_CONTROL_NO_MOTION_OFF_SEC 600U
 #define AUTO_CONTROL_POWER_THRESHOLD_W 10.0f
 
 #endif
