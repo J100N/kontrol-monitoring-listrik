@@ -309,10 +309,13 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
     : (eventsSafePage - 1) * EVENTS_PER_PAGE + 1;
   const eventsRangeEnd = Math.min(eventsSafePage * EVENTS_PER_PAGE, sortedEvents.length);
 
-  const pirLabel =
-    pirTimeout < 60
-      ? `${pirTimeout} dtk`
-      : `${Math.floor(pirTimeout / 60)} mnt`;
+  // Hint menit hanya ditampilkan saat >= 60 dtk agar tidak redundan
+  // (mis. "30 dtk (30 dtk)"). Pecahan menit dibulatkan 1 desimal.
+  const pirMins = pirTimeout / 60;
+  const pirMinuteHint =
+    pirTimeout >= 60
+      ? ` (${pirTimeout % 60 === 0 ? pirMins : pirMins.toFixed(1)} mnt)`
+      : "";
 
   // ── Handlers ─────────────────────────────────────────────────────────────
 
@@ -339,7 +342,7 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
     // Clamp ke rentang yang divalidasi API (thr 0–5000 W, pir 30–7200 dtk integer)
     // agar input ketik yang di luar batas tidak memicu error 400.
     const safeThreshold = Math.min(5000, Math.max(0, Number(threshold) || 0));
-    const safePir = Math.min(7200, Math.max(30, Math.round(Number(pirTimeout) || 30)));
+    const safePir = Math.min(7200, Math.max(5, Math.round(Number(pirTimeout) || 5)));
     // sendConfig → POST /config: kirim config_update ke ESP32 (via MQTT) +
     // simpan ke registry. (patchDevice lama hanya update registry, device tak tahu.)
     const ok = await sendConfig(id, {
@@ -743,7 +746,7 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
                 </div>
                 <input
                   type="range"
-                  min={1}
+                  min={0}
                   max={50}
                   value={threshold}
                   onChange={(e) => {
@@ -755,8 +758,8 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
                   aria-label="Threshold standby dalam Watt"
                 />
                 <div className="vg-detail-config__field-limits">
-                  <span>1 W</span>
-                  <span>50 W</span>
+                  <span>0 W</span>
+                  <span>50 W · ketik ↑5000</span>
                 </div>
               </div>
 
@@ -768,9 +771,9 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
                     <input
                       type="number"
                       className="vg-detail-config__val-input"
-                      min={30}
-                      max={7200}
-                      step={1}
+                      min={5}
+                      max={3600}
+                      step={5}
                       value={pirTimeout}
                       onChange={(e) => {
                         setPirTimeout(Number(e.target.value));
@@ -779,14 +782,14 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
                       disabled={isOffline}
                       aria-label="PIR timeout dalam detik (bisa diketik)"
                     />
-                    <span className="vg-detail-config__val-unit">dtk ({pirLabel})</span>
+                    <span className="vg-detail-config__val-unit">dtk{pirMinuteHint}</span>
                   </span>
                 </div>
                 <input
                   type="range"
-                  min={30}
+                  min={5}
                   max={3600}
-                  step={30}
+                  step={5}
                   value={pirTimeout}
                   onChange={(e) => {
                     setPirTimeout(Number(e.target.value));
@@ -797,7 +800,7 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
                   aria-label="PIR timeout dalam detik"
                 />
                 <div className="vg-detail-config__field-limits">
-                  <span>30 dtk</span>
+                  <span>5 dtk</span>
                   <span>60 mnt</span>
                 </div>
               </div>

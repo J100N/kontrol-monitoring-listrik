@@ -531,7 +531,7 @@ static void mqtt_command_callback(const char *topic, const uint8_t *payload, siz
         float new_thr = -1.0f;
         int parsed = sscanf(cmd, "config_update:pir=%u,thr=%f", &new_pir, &new_thr);
         if (parsed == 2 &&
-            new_pir >= 30U && new_pir <= 7200U &&
+            new_pir >= 5U && new_pir <= 7200U &&
             new_thr >= 0.0f && new_thr <= 5000.0f) {
             if (auto_control_set_params((uint32_t)new_pir, new_thr) == ESP_OK) {
                 autocfg_nvs_save((uint32_t)new_pir, new_thr);

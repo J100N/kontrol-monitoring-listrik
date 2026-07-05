@@ -496,41 +496,64 @@
 }
 
 .vg-detail-config__field-val {
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-bold);
-  color: var(--brand-blue-600);
   display: flex;
   align-items: baseline;
-  gap: 4px;
+  gap: 6px;
 }
 
 /* Input nilai yang bisa diketik (Watt / detik) — pengganti badge statis */
 .vg-detail-config__val-input {
-  width: 64px;
+  width: 76px;
   text-align: right;
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-bold);
   color: var(--brand-blue-600);
-  background: var(--slate-100, #f1f5f9);
-  border: 1px solid var(--slate-300, #cbd5e1);
-  border-radius: 6px;
-  padding: 2px 6px;
+  background: var(--card-bg, #ffffff);
+  border: 1.5px solid var(--slate-200, #e2e8f0);
+  border-radius: 9px;
+  padding: 7px 11px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.vg-detail-config__val-input:hover:not(:disabled) {
+  border-color: var(--brand-blue-300, #93c5fd);
 }
 
 .vg-detail-config__val-input:focus {
   outline: none;
-  border-color: var(--brand-blue-500);
-  box-shadow: 0 0 0 2px rgba(31, 122, 214, 0.2);
+  border-color: var(--brand-blue-500, #1f7ad6);
+  box-shadow: 0 0 0 3px rgba(31, 122, 214, 0.16);
 }
 
 .vg-detail-config__val-input:disabled {
-  opacity: 0.5;
+  opacity: 0.55;
   cursor: not-allowed;
 }
 
+/* Sembunyikan panah spinner bawaan agar tampil bersih (pakai slider utk geser) */
+.vg-detail-config__val-input::-webkit-outer-spin-button,
+.vg-detail-config__val-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.vg-detail-config__val-input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 .vg-detail-config__val-unit {
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm, 0.8rem);
+  font-weight: var(--font-weight-medium, 500);
   color: var(--text-soft);
+  white-space: nowrap;
+}
+
+/* Beri sedikit ruang antara header (label + nilai) dan slider */
+.vg-detail-config__field-header {
+  margin-bottom: 10px;
+}
+.vg-detail-config__field + .vg-detail-config__field {
+  margin-top: 18px;
 }
 
 .vg-detail-config__field-limits {

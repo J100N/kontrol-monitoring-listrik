@@ -41,7 +41,7 @@ module.exports = {
     additionalProperties: false,
     required: ["pir_timeout_sec", "power_threshold_w"],
     properties: {
-      pir_timeout_sec:   { type: "integer", minimum: 30, maximum: 7200 },   // Timeout PIR (detik)
+      pir_timeout_sec:   { type: "integer", minimum: 5,  maximum: 7200 },   // Timeout PIR (detik)
       power_threshold_w: { type: "number",  minimum: 0,  maximum: 5000 },   // Threshold daya standby (Watt)
     },
   },
@@ -55,7 +55,7 @@ module.exports = {
       label:              { type: "string",  minLength: 1, maxLength: 64 },   // Nama tampilan
       room:               { type: "string",  minLength: 1, maxLength: 64 },   // Lokasi fisik
       power_threshold_w:  { type: "number",  minimum: 0,   maximum: 5000 },   // Batas daya standby (Watt)
-      pir_timeout_sec:    { type: "integer", minimum: 30,  maximum: 7200 },   // Timeout sensor PIR (detik)
+      pir_timeout_sec:    { type: "integer", minimum: 5,   maximum: 7200 },   // Timeout sensor PIR (detik)
     },
   },
 };
