@@ -28,7 +28,7 @@ function createDeviceRegistryRepo({ filePath }) {
       device_id: device.device_id,
       label: device.label || existing?.label || device.device_id,
       room: device.room || existing?.room || "Belum diset",
-      mode: device.mode || existing?.mode || "manual",
+      mode: device.mode || existing?.mode || "automatic",
       power_threshold_w:
         device.power_threshold_w ?? existing?.power_threshold_w ?? 10,
       pir_timeout_sec:
