@@ -13,6 +13,13 @@
 
 #define WIFI_CONNECTED_BIT BIT0
 
+// Mitigasi brownout pada catu daya lemah: batasi daya pancar WiFi agar lonjakan
+// arus saat TX lebih kecil → drop tegangan berkurang → brownout reset lebih
+// jarang. Satuan 0.25 dBm; 44 = 11 dBm (turun dari default 20 dBm). Untuk soket
+// yang dekat router jangkauan tetap cukup. CATATAN: ini hanya mengurangi, BUKAN
+// pengganti catu daya 5V yang memadai (≥1A) + kapasitor bulk.
+#define WIFI_MANAGER_MAX_TX_POWER_QDBM 44
+
 static const char *TAG = "wifi_manager";
 
 // Status internal runtime untuk satu sesi WiFi station.
@@ -285,6 +292,16 @@ esp_err_t wifi_manager_start(void)
 
     ESP_RETURN_ON_ERROR(esp_wifi_start(), TAG, "esp_wifi_start failed");
     s_started = true;
+
+    // Turunkan daya pancar WiFi setelah start (mitigasi brownout catu daya lemah).
+    // Non-fatal: kalau gagal, tetap lanjut dengan daya default.
+    esp_err_t tx_ret = esp_wifi_set_max_tx_power(WIFI_MANAGER_MAX_TX_POWER_QDBM);
+    if (tx_ret != ESP_OK) {
+        ESP_LOGW(TAG, "set max tx power gagal: %s", esp_err_to_name(tx_ret));
+    } else {
+        ESP_LOGI(TAG, "wifi max tx power dibatasi ke %d (unit 0.25dBm = %.1f dBm)",
+                 WIFI_MANAGER_MAX_TX_POWER_QDBM, WIFI_MANAGER_MAX_TX_POWER_QDBM * 0.25f);
+    }
 
     return ESP_OK;
 }
