@@ -154,7 +154,12 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
   const [isAuto,        setIsAutoLocal]   = useState(false);
   const [threshold,     setThreshold]     = useState(10);
   const [pirTimeout,    setPirTimeout]    = useState(600);
-  const [configDirty,   setConfigDirty]   = useState(false);
+  // Teks input terpisah (string) supaya pengetikan bebas: field bisa dikosongkan
+  // dan nol di depan langsung dibuang ("09" -> "9"). Angka di atas tetap sumber
+  // kebenaran untuk slider, grafik, dan simpan.
+  const [thresholdInput, setThresholdInput] = useState("10");
+  const [pirInput,        setPirInput]       = useState("600");
+  const [configDirty,   setConfigDirty]     = useState(false);
   const [saveMsg,       setSaveMsg]       = useState<string | null>(null);
   const [eventsPage,    setEventsPage]    = useState(1);
 
@@ -174,6 +179,8 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
     setIsAutoLocal(device.mode === "AUTO");
     setThreshold(device.threshold ?? 10);
     setPirTimeout(device.pirTimeout ?? 600);
+    setThresholdInput(String(device.threshold ?? 10));
+    setPirInput(String(device.pirTimeout ?? 600));
     setConfigDirty(false);
     setEventsPage(1);
   }, [device?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -309,6 +316,11 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
     : (eventsSafePage - 1) * EVENTS_PER_PAGE + 1;
   const eventsRangeEnd = Math.min(eventsSafePage * EVENTS_PER_PAGE, sortedEvents.length);
 
+  // Bersihkan input angka: buang non-digit lalu buang nol di depan ("09" -> "9",
+  // "0" tetap "0", "" tetap kosong) supaya field tak menyisakan nol pemandu.
+  const sanitizeInt = (s: string) =>
+    s.replace(/[^0-9]/g, "").replace(/^0+(?=\d)/, "");
+
   // Hint menit hanya ditampilkan saat >= 60 dtk agar tidak redundan
   // (mis. "30 dtk (30 dtk)"). Pecahan menit dibulatkan 1 desimal.
   const pirMins = pirTimeout / 60;
@@ -351,6 +363,8 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
     });
     setThreshold(safeThreshold);
     setPirTimeout(safePir);
+    setThresholdInput(String(safeThreshold));
+    setPirInput(String(safePir));
     setSaveMsg(
       ok
         ? "Konfigurasi terkirim ke perangkat!"
@@ -728,14 +742,14 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
                   </span>
                   <span className="vg-detail-config__field-val">
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       className="vg-detail-config__val-input"
-                      min={0}
-                      max={5000}
-                      step={1}
-                      value={threshold}
+                      value={thresholdInput}
                       onChange={(e) => {
-                        setThreshold(Number(e.target.value));
+                        const s = sanitizeInt(e.target.value);
+                        setThresholdInput(s);
+                        setThreshold(s === "" ? 0 : Number(s));
                         setConfigDirty(true);
                       }}
                       disabled={isOffline}
@@ -750,7 +764,9 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
                   max={50}
                   value={threshold}
                   onChange={(e) => {
-                    setThreshold(Number(e.target.value));
+                    const n = Number(e.target.value);
+                    setThreshold(n);
+                    setThresholdInput(String(n));
                     setConfigDirty(true);
                   }}
                   className="vg-detail-slider"
@@ -769,14 +785,14 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
                   <span className="vg-detail-config__label">PIR Timeout</span>
                   <span className="vg-detail-config__field-val">
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       className="vg-detail-config__val-input"
-                      min={5}
-                      max={3600}
-                      step={5}
-                      value={pirTimeout}
+                      value={pirInput}
                       onChange={(e) => {
-                        setPirTimeout(Number(e.target.value));
+                        const s = sanitizeInt(e.target.value);
+                        setPirInput(s);
+                        setPirTimeout(s === "" ? 0 : Number(s));
                         setConfigDirty(true);
                       }}
                       disabled={isOffline}
@@ -792,7 +808,9 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
                   step={5}
                   value={pirTimeout}
                   onChange={(e) => {
-                    setPirTimeout(Number(e.target.value));
+                    const n = Number(e.target.value);
+                    setPirTimeout(n);
+                    setPirInput(String(n));
                     setConfigDirty(true);
                   }}
                   className="vg-detail-slider"
