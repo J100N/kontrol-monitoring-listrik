@@ -99,17 +99,14 @@ static const char *wifi_manager_disconnect_reason_to_string(wifi_err_reason_t re
 static bool wifi_manager_should_retry_disconnect_reason(wifi_err_reason_t reason)
 {
     switch (reason) {
+    // Hanya alasan yang jelas menandakan salah konfigurasi (kredensial/asosiasi
+    // ditolak) yang tidak boleh di-retry, supaya tidak spam & kena lockout AP.
+    // Handshake/4way timeout DIANGGAP transien (sinyal lemah) → tetap retry.
 #ifdef WIFI_REASON_AUTH_FAIL
     case WIFI_REASON_AUTH_FAIL:
 #endif
 #ifdef WIFI_REASON_ASSOC_FAIL
     case WIFI_REASON_ASSOC_FAIL:
-#endif
-#ifdef WIFI_REASON_HANDSHAKE_TIMEOUT
-    case WIFI_REASON_HANDSHAKE_TIMEOUT:
-#endif
-#ifdef WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT
-    case WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT:
 #endif
         return false;
     default:
@@ -147,24 +144,28 @@ static void wifi_manager_event_handler(
                 wifi_manager_disconnect_reason_to_string(reason),
                 (unsigned int)reason);
 
-            if (should_retry && s_retry_count < s_config.max_retry) {
+            if (should_retry) {
+                // Reconnect SELAMANYA untuk gangguan transien (router reboot,
+                // sinyal hilang, AP sibuk). Percobaan di-pace oleh driver WiFi
+                // (event STA_DISCONNECTED baru muncul setelah timeout scan/assoc),
+                // jadi ini bukan busy-loop. Device tetap jalan lokal saat offline.
+                // max_retry kini hanya ambang verbositas log, bukan batas menyerah.
                 s_retry_count++;
                 s_state = WIFI_MANAGER_STATE_CONNECTING;
-                ESP_LOGW(TAG, "wifi disconnected, retry %u/%u", s_retry_count, s_config.max_retry);
+                if (s_retry_count <= s_config.max_retry || (s_retry_count % 20U) == 0U) {
+                    ESP_LOGW(TAG, "wifi disconnected, reconnect attempt %u",
+                             (unsigned int)s_retry_count);
+                }
                 esp_wifi_connect();
             } else {
+                // Alasan non-retryable (kredensial/asosiasi ditolak): hentikan
+                // agar tidak spam / kena lockout AP. Perlu re-provisioning.
                 s_state = WIFI_MANAGER_STATE_FAILED;
-
-                if (!should_retry) {
-                    ESP_LOGE(
-                        TAG,
-                        "wifi connect stopped: non-retryable reason=%s:%u",
-                        wifi_manager_disconnect_reason_to_string(reason),
-                        (unsigned int)reason);
-                } else {
-                    ESP_LOGE(TAG, "wifi connect failed after %u retry", s_config.max_retry);
-                }
-
+                ESP_LOGE(
+                    TAG,
+                    "wifi connect stopped: non-retryable reason=%s:%u",
+                    wifi_manager_disconnect_reason_to_string(reason),
+                    (unsigned int)reason);
                 wifi_manager_publish_event(WIFI_MANAGER_EVENT_CONNECT_FAILED, event_data);
             }
             break;

@@ -90,10 +90,11 @@ static void ascon_ctr_nvs_maybe_save(uint64_t current)
  * sebagai centi-watt (watt*100) supaya muat di nvs_set_u32.
  * ============================================================= */
 
-#define AUTOCFG_NVS_NS   "autocfg"   // namespace NVS untuk konfig auto-control
-#define AUTOCFG_KEY_PIR  "pir_sec"   // timeout PIR (detik)
-#define AUTOCFG_KEY_THR  "thr_cw"    // threshold daya (centi-watt = watt*100)
-#define AUTOCFG_KEY_MODE "mode"      // mode kerja (0=manual, 1=automatic)
+#define AUTOCFG_NVS_NS    "autocfg"   // namespace NVS untuk konfig auto-control
+#define AUTOCFG_KEY_PIR   "pir_sec"   // timeout PIR (detik)
+#define AUTOCFG_KEY_THR   "thr_cw"    // threshold daya (centi-watt = watt*100)
+#define AUTOCFG_KEY_MODE  "mode"      // mode kerja (0=manual, 1=automatic)
+#define AUTOCFG_KEY_RELAY "relay_on"  // status relay terakhir (0=off, 1=on)
 
 // Baca konfig dari NVS bila ada; bila tidak, *_io tidak diubah (pakai default).
 static void autocfg_nvs_load(uint32_t *pir_sec_io, float *thr_w_io)
@@ -137,6 +138,33 @@ static void autocfg_nvs_save_mode(device_work_mode_t mode)
     nvs_handle_t h;
     if (nvs_open(AUTOCFG_NVS_NS, NVS_READWRITE, &h) == ESP_OK) {
         nvs_set_u32(h, AUTOCFG_KEY_MODE, (uint32_t)mode);
+        nvs_commit(h);
+        nvs_close(h);
+    }
+}
+
+// Baca status relay terakhir dari NVS. Bila belum pernah tersimpan, *on_io
+// tidak diubah (pakai default pemanggil). Dipakai agar relay pulih ke keadaan
+// terakhir setelah listrik kembali (bukan selalu ON).
+static void autocfg_nvs_load_relay(bool *on_io)
+{
+    nvs_handle_t h;
+    if (nvs_open(AUTOCFG_NVS_NS, NVS_READONLY, &h) != ESP_OK) {
+        return;
+    }
+    uint8_t on = 0;
+    if (nvs_get_u8(h, AUTOCFG_KEY_RELAY, &on) == ESP_OK) {
+        *on_io = (on != 0);
+    }
+    nvs_close(h);
+}
+
+// Simpan status relay ke NVS setiap kali berubah agar tahan reboot.
+static void autocfg_nvs_save_relay(bool on)
+{
+    nvs_handle_t h;
+    if (nvs_open(AUTOCFG_NVS_NS, NVS_READWRITE, &h) == ESP_OK) {
+        nvs_set_u8(h, AUTOCFG_KEY_RELAY, on ? 1U : 0U);
         nvs_commit(h);
         nvs_close(h);
     }
@@ -474,6 +502,8 @@ static void mqtt_command_callback(const char *topic, const uint8_t *payload, siz
             // jelas menyebut aksi (bukan sekadar "command dieksekusi").
             ack_msg = relay_get_state() ? "listrik dinyalakan manual"
                                         : "listrik dimatikan manual";
+            // Persist status relay agar pulih ke keadaan terakhir setelah reboot.
+            autocfg_nvs_save_relay(relay_get_state());
         }
         // Kontrol manual → paksa mode MANUAL supaya auto-control tidak menimpa.
         if (device_state_is_initialized()) {
@@ -605,9 +635,21 @@ void app_main(void)
     // daya memang kurang kuat, jeda ini hanya mengurangi, bukan menghilangkan.
     vTaskDelay(pdMS_TO_TICKS(1500));
 
-    // Relay otomatis nyala saat init (default_on=true) supaya PZEM langsung dapat arus.
-    ESP_ERROR_CHECK(relay_init(NULL));
+    // Pulihkan status relay terakhir dari NVS (Pilihan B): relay bangun sesuai
+    // keadaan sebelum listrik mati (ON tetap ON, OFF tetap OFF), bukan selalu ON.
+    // First-boot (belum ada NVS) default ON agar PZEM langsung mendapat arus.
+    // Bila status terakhir OFF, PZEM memang tidak membaca saat boot — itu wajar.
+    bool boot_relay_on = true;
+    autocfg_nvs_load_relay(&boot_relay_on);
+    relay_config_t relay_cfg = {
+        .gpio_num = RELAY_DEFAULT_GPIO,
+        .active_level = RELAY_ACTIVE_LEVEL_HIGH,
+        .default_on = boot_relay_on,  // set sekali sesuai status terakhir (tanpa pulsa ON)
+    };
+    ESP_ERROR_CHECK(relay_init(&relay_cfg));
     ESP_ERROR_CHECK(device_state_set_relay(relay_get_state()));
+    ESP_LOGI(TAG, "[%s] Status relay saat boot dipulihkan: %s", DEVICE_ID,
+             boot_relay_on ? "ON" : "OFF");
     refresh_oled_from_state();
 
     // Inisialisasi PIR untuk deteksi gerakan penghuni.
@@ -753,7 +795,21 @@ void app_main(void)
         bool motion = pir_is_motion_detected();
 
         device_state_set_wifi_connected(wifi_manager_is_connected());
-        device_state_set_mqtt_connected(mqtt_app_is_connected());
+        bool mqtt_connected_now = mqtt_app_is_connected();
+        device_state_set_mqtt_connected(mqtt_connected_now);
+
+        // Deteksi MQTT baru saja reconnect (offline→online): umumkan ulang status
+        // ONLINE + status relay (retain) supaya dashboard pulih dari status
+        // OFFLINE basi yang di-set broker via LWT saat device sempat terputus.
+        // Buffer telemetri otomatis ter-flush pada trigger batch berikutnya.
+        static bool s_prev_mqtt_connected = false;
+        if (mqtt_connected_now && !s_prev_mqtt_connected) {
+            ESP_LOGI(TAG, "[%s] MQTT reconnect: umumkan ulang ONLINE & status relay", DEVICE_ID);
+            mqtt_app_publish_device_status(true, -1, true);
+            mqtt_app_publish_relay_status(relay_get_state(), -1, true);
+        }
+        s_prev_mqtt_connected = mqtt_connected_now;
+
         device_state_set_pir_motion(motion);
         device_state_set_relay(relay_is_on);
         device_state_set_last_power(power_for_ctrl);
@@ -777,6 +833,8 @@ void app_main(void)
 
             if (is_auto_mode && decision.action != AUTO_CONTROL_ACTION_NONE) {
                 device_state_set_relay(relay_get_state());
+                // Persist agar status hasil aksi otomatis pulih setelah reboot.
+                autocfg_nvs_save_relay(relay_get_state());
 
                 ESP_LOGI(
                     TAG,
