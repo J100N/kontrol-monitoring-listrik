@@ -1,0 +1,295 @@
+/* =============================================================================
+ * LoginPage styles
+ * Layout: split 50/50 desktop, stack vertical pada mobile.
+ * ========================================================================== */
+
+.vg-login {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  min-height: 100vh;
+  background: var(--surface-white);
+}
+
+/* ============================================================
+ * Panel kiri (hero, navy)
+ * ========================================================= */
+.vg-login__hero {
+  position: relative;
+  overflow: hidden;
+  padding: var(--space-10) var(--space-12);
+  background: linear-gradient(135deg, #0a2942 0%, #134a73 100%);
+  color: var(--text-on-brand);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  isolation: isolate;
+}
+
+.vg-login__hero::before {
+  /* Pattern halus diagonal supaya gelap tidak monoton */
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 80% 20%, rgba(56, 189, 248, 0.18), transparent 50%),
+    radial-gradient(circle at 10% 90%, rgba(245, 180, 28, 0.12), transparent 45%);
+  z-index: -1;
+}
+
+/* Lingkaran dekoratif - pure CSS pseudo elements ringan */
+.vg-login__deco {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  pointer-events: none;
+  z-index: 0;
+}
+.vg-login__deco--1 {
+  width: 320px;
+  height: 320px;
+  right: -120px;
+  top: -80px;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.18), transparent 70%);
+}
+.vg-login__deco--2 {
+  width: 200px;
+  height: 200px;
+  right: 80px;
+  top: 40px;
+  background: radial-gradient(circle, rgba(33, 150, 243, 0.18), transparent 70%);
+}
+.vg-login__deco--3 {
+  width: 480px;
+  height: 480px;
+  left: -180px;
+  bottom: -200px;
+  background: radial-gradient(circle, rgba(31, 122, 214, 0.15), transparent 70%);
+}
+
+.vg-login__hero-top,
+.vg-login__hero-content,
+.vg-login__features {
+  position: relative;
+  z-index: 1;
+}
+
+.vg-login__hero-content {
+  max-width: 460px;
+}
+
+.vg-login__headline {
+  font-size: clamp(28px, 3.4vw, 44px);
+  font-weight: var(--font-weight-extrabold);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin-bottom: var(--space-5);
+}
+
+.vg-login__subline {
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-relaxed);
+  color: rgba(255, 255, 255, 0.78);
+  max-width: 420px;
+}
+
+.vg-login__features {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.vg-login__feature {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--font-size-md);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.vg-login__bullet {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--warning-400);
+  flex-shrink: 0;
+  box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.18);
+}
+
+/* ============================================================
+ * Panel kanan (form, putih)
+ * ========================================================= */
+.vg-login__form-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-12) var(--space-10);
+}
+
+.vg-login__form {
+  width: 100%;
+  max-width: 440px;
+}
+
+.vg-login__form-header {
+  margin-bottom: var(--space-8);
+}
+
+.vg-login__welcome {
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-strong);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.vg-login__welcome-sub {
+  margin-top: var(--space-2);
+  font-size: var(--font-size-md);
+  color: var(--text-muted);
+}
+
+.vg-login__fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* Row untuk Remember + Lupa password */
+.vg-login__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-1);
+}
+
+.vg-login__remember {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-base);
+  color: var(--text-base);
+  cursor: pointer;
+  user-select: none;
+}
+
+.vg-login__remember input {
+  /* Sembunyikan native checkbox; pakai custom box */
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.vg-login__check {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-xs);
+  border: 1.5px solid var(--border-base);
+  background: var(--surface-white);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.vg-login__check svg {
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.vg-login__remember input:checked + .vg-login__check {
+  background: var(--brand-blue-500);
+  border-color: var(--brand-blue-500);
+}
+
+.vg-login__remember input:checked + .vg-login__check svg {
+  opacity: 1;
+}
+
+.vg-login__remember input:focus-visible + .vg-login__check {
+  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.3);
+}
+
+.vg-login__forgot {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--brand-blue-500);
+}
+
+/* Wrapper password field + tombol show/hide di kanan dalam */
+.vg-login__password-wrap {
+  position: relative;
+}
+
+/* Tombol mata show/hide password — posisi absolut di dalam wrapper */
+.vg-login__eye {
+  position: absolute;
+  right: 12px;
+  bottom: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-radius: var(--radius-xs);
+  transition: color var(--transition-fast);
+  z-index: 1;
+}
+
+.vg-login__eye:hover {
+  color: var(--text-base);
+}
+
+.vg-login__error {
+  background: var(--danger-50);
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.vg-login__footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-6);
+  font-size: var(--font-size-sm);
+  color: var(--brand-blue-500);
+  font-weight: var(--font-weight-medium);
+}
+
+/* ============================================================
+ * Responsive: stack vertikal, hero di atas
+ * ========================================================= */
+@media (max-width: 960px) {
+  .vg-login {
+    grid-template-columns: 1fr;
+  }
+  .vg-login__hero {
+    padding: var(--space-8) var(--space-6);
+    min-height: 360px;
+    gap: var(--space-6);
+  }
+  .vg-login__form-wrap {
+    padding: var(--space-8) var(--space-5);
+  }
+  .vg-login__welcome {
+    font-size: var(--font-size-2xl);
+  }
+}
+
+@media (max-width: 480px) {
+  .vg-login__hero {
+    padding: var(--space-6) var(--space-4);
+  }
+  .vg-login__form-wrap {
+    padding: var(--space-6) var(--space-4);
+  }
+}

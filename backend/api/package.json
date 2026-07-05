@@ -1,0 +1,22 @@
+{
+  "name": "kontrol-monitoring-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "REST API untuk dashboard: ambil device, telemetry, histori, kontrol manual, dan setting per device.",
+  "main": "src/app.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/app.js",
+    "check": "node --check src/app.js"
+  },
+  "dependencies": {
+    "@influxdata/influxdb-client": "^1.35.0",
+    "ajv": "^8.17.1",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "jsonwebtoken": "^9.0.2",
+    "mqtt": "^5.10.3"
+  }
+}

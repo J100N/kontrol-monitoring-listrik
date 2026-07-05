@@ -1,0 +1,242 @@
+/* =============================================================================
+ * SecurityPage styles
+ * ========================================================================== */
+
+/* ============================================================
+ * Hero banner
+ * ========================================================= */
+.vg-sec-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-6);
+  background: linear-gradient(135deg, #0a2942 0%, #134a73 100%);
+  border-radius: var(--radius-lg);
+  color: var(--text-on-brand);
+  margin-bottom: var(--space-6);
+  position: relative;
+  overflow: hidden;
+}
+
+.vg-sec-banner::after {
+  /* Bulatan halus untuk visual interest */
+  content: "";
+  position: absolute;
+  width: 220px;
+  height: 220px;
+  right: 30%;
+  top: -120px;
+  background: radial-gradient(
+    circle,
+    rgba(56, 189, 248, 0.18),
+    transparent 60%
+  );
+  pointer-events: none;
+}
+
+.vg-sec-banner__icon {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--brand-blue-300);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.vg-sec-banner__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.vg-sec-banner__text h2 {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.01em;
+  margin-bottom: 2px;
+}
+
+.vg-sec-banner__text p {
+  font-size: var(--font-size-sm);
+  color: rgba(255, 255, 255, 0.78);
+  max-width: 580px;
+}
+
+.vg-sec-banner__status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.vg-sec-banner__uptime {
+  font-size: var(--font-size-sm);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* ============================================================
+ * KPI grid
+ * ========================================================= */
+.vg-sec__kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+/* ============================================================
+ * Audit log
+ * ========================================================= */
+.vg-audit__wrap {
+  overflow-x: auto;
+  margin: 0 calc(-1 * var(--space-6));
+  padding: 0 var(--space-6);
+}
+
+.vg-audit__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.vg-audit__table th {
+  text-align: left;
+  font-size: 10px;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  padding: var(--space-3) var(--space-3);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.vg-audit__table td {
+  padding: var(--space-3) var(--space-3);
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: middle;
+}
+
+.vg-audit__table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.vg-audit__table tbody tr:hover {
+  background: var(--slate-50);
+}
+
+.vg-audit__time {
+  font-family: var(--font-family-mono);
+  color: var(--text-muted);
+  white-space: nowrap;
+  width: 100px;
+}
+
+.vg-audit__msg {
+  color: var(--text-base);
+  line-height: var(--line-height-relaxed);
+}
+
+.vg-audit__src {
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
+.vg-audit__src code {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+}
+
+/* Highlight rows: danger merah pucat, warning kuning pucat */
+.vg-audit__row--danger,
+.vg-audit__row--danger:hover {
+  background: var(--danger-50) !important;
+}
+
+.vg-audit__row--danger .vg-audit__msg {
+  color: #b91c1c;
+  font-weight: var(--font-weight-medium);
+}
+
+.vg-audit__row--warning,
+.vg-audit__row--warning:hover {
+  background: var(--warning-50) !important;
+}
+
+.vg-audit__empty {
+  text-align: center;
+  padding: var(--space-8);
+  color: var(--text-muted);
+}
+
+/* ── Paginasi audit log ──────────────────────────────────────────────────── */
+.vg-audit__pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-soft);
+}
+
+.vg-audit__pager-info {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+}
+
+.vg-audit__pager-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.vg-audit__pager-page {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+  min-width: 44px;
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .vg-audit__pager {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .vg-audit__pager-controls {
+    justify-content: space-between;
+  }
+}
+
+/* ============================================================
+ * Responsive
+ * ========================================================= */
+@media (max-width: 1100px) {
+  .vg-sec__kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .vg-sec-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .vg-sec-banner__status {
+    align-items: flex-start;
+  }
+  .vg-sec__kpis {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .vg-sec__kpis {
+    grid-template-columns: 1fr;
+  }
+}

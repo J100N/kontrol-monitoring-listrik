@@ -1,0 +1,17 @@
+{
+  "name": "kontrol-monitoring-tests",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test:unit": "node --test integration/unit_replay_guard.test.js integration/unit_schema_validator.test.js integration/unit_device_registry.test.js",
+    "test:integration": "node integration/test_mqtt_flow.js",
+    "test:e2e": "node e2e/test_full_flow.js"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "axios": "^1.7.7",
+    "mqtt": "^5.10.3",
+    "ws": "^8.18.0"
+  }
+}

@@ -1,0 +1,278 @@
+/* =============================================================================
+ * Layout styles: Logo, TopNav, AppShell
+ * ========================================================================== */
+
+/* ---------- Logo ---------- */
+.vg-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  text-decoration: none;
+}
+
+.vg-logo__mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(31, 122, 214, 0.25);
+}
+
+.vg-logo__text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.vg-logo__name {
+  font-weight: var(--font-weight-extrabold);
+  letter-spacing: -0.02em;
+  color: inherit;
+}
+
+.vg-logo__tagline {
+  font-size: 9px;
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.18em;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* ---------- TopNav ---------- */
+.vg-topnav {
+  background: var(--surface-white);
+  border-bottom: 1px solid var(--border-soft);
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
+.vg-topnav__inner {
+  max-width: var(--shell-max-width);
+  height: var(--topnav-height);
+  margin: 0 auto;
+  padding: 0 var(--space-8);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.vg-topnav__nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.vg-topnav__link {
+  position: relative;
+  padding: 8px 16px;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-muted);
+  border-radius: var(--radius-md);
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.vg-topnav__link:hover {
+  color: var(--text-strong);
+  background: var(--slate-50);
+}
+
+.vg-topnav__link--active,
+.vg-topnav__link--active:hover {
+  color: var(--brand-blue-600);
+  background: var(--brand-blue-50);
+}
+
+/* Jam live di antara menu & profil admin (matching gaya user info) */
+.vg-topnav__clock {
+  margin-left: auto;            /* dorong jam + profil ke kanan */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.2;
+  padding-right: var(--space-4);
+  border-right: 1px solid var(--border-soft);
+}
+
+.vg-topnav__clock-time {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3px;
+}
+
+.vg-topnav__clock-date {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+.vg-topnav__user {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 6px 14px 6px 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: background var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.vg-topnav__user:hover {
+  background: var(--slate-50);
+  border-color: var(--border-soft);
+}
+
+.vg-topnav__avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-sm);
+  flex-shrink: 0;
+}
+
+.vg-topnav__userinfo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.2;
+}
+
+.vg-topnav__username {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-strong);
+}
+
+.vg-topnav__role {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+/* Dropdown profil (popup Logout) */
+.vg-topnav__user-wrap {
+  position: relative;
+}
+
+.vg-topnav__menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 160px;
+  background: var(--surface-white);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+  padding: 6px;
+  z-index: 50;
+}
+
+.vg-topnav__menu-item {
+  width: 100%;
+  text-align: left;
+  padding: 9px 12px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: #dc2626;
+  transition: background var(--transition-fast);
+}
+
+.vg-topnav__menu-item:hover {
+  background: #fef2f2;
+}
+
+/* ---------- AppShell ---------- */
+.vg-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.vg-shell__main {
+  flex: 1;
+  padding: var(--space-8) 0 var(--space-12);
+}
+
+.vg-shell__container {
+  max-width: var(--shell-max-width);
+  margin: 0 auto;
+  padding: 0 var(--space-8);
+}
+
+/* Page header umum (judul + subjudul + segmented control) */
+.vg-page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.vg-page-header__title {
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-strong);
+  letter-spacing: -0.02em;
+  line-height: var(--line-height-tight);
+}
+
+.vg-page-header__subtitle {
+  font-size: var(--font-size-base);
+  color: var(--text-muted);
+  margin-top: var(--space-2);
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 880px) {
+  .vg-topnav__inner {
+    padding: 0 var(--space-4);
+    gap: var(--space-3);
+  }
+  .vg-topnav__nav {
+    gap: 0;
+  }
+  .vg-topnav__link {
+    padding: 8px 10px;
+    font-size: var(--font-size-sm);
+  }
+  .vg-topnav__userinfo {
+    display: none; /* hanya avatar pada mobile */
+  }
+  .vg-shell__container {
+    padding: 0 var(--space-4);
+  }
+  .vg-shell__main {
+    padding: var(--space-5) 0 var(--space-10);
+  }
+  .vg-page-header__title {
+    font-size: var(--font-size-2xl);
+  }
+}
+
+@media (max-width: 640px) {
+  .vg-topnav__nav {
+    /* Pada mobile sangat kecil, tampilkan nav sebagai scroll horizontal */
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+  .vg-logo__tagline {
+    display: none;
+  }
+}

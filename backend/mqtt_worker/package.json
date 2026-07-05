@@ -1,0 +1,19 @@
+{
+  "name": "kontrol-monitoring-mqtt-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MQTT worker untuk ingest telemetry ESP32, dekripsi ASCON, validasi payload, simpan InfluxDB, dan bridge command/status dashboard.",
+  "main": "src/worker.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/worker.js",
+    "check": "node --check src/worker.js",
+    "e2e:live": "node src/tools/e2eLiveCheck.js"
+  },
+  "dependencies": {
+    "@influxdata/influxdb-client": "^1.35.0",
+    "ajv": "^8.17.1",
+    "dotenv": "^16.4.5",
+    "mqtt": "^5.10.3"
+  }
+}

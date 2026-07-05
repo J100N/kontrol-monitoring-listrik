@@ -1,0 +1,345 @@
+/* =============================================================================
+ * SettingsPage styles — section helpers, kartu tarif, grid MQTT, notifikasi,
+ * dan save-bar lengket (satu tombol simpan untuk seluruh halaman).
+ * ========================================================================== */
+
+.vg-settings__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  /* Ruang ekstra di bawah supaya konten terakhir tidak tertutup save-bar */
+  padding-bottom: var(--space-8);
+}
+
+/* Tiap section sedikit interaktif: hover mengangkat & memberi aksen lembut */
+.vg-settings__content > .vg-card {
+  transition: box-shadow var(--transition-fast),
+    transform var(--transition-fast), border-color var(--transition-fast);
+}
+
+.vg-settings__content > .vg-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+/* ============================================================
+ * Input terang & elegan khusus halaman Settings
+ *
+ * Default .vg-input bertema gelap (dipakai halaman login). Di Settings,
+ * kartu berlatar putih sehingga input dibuat terang agar menyatu: isian
+ * sedikit ber-tint (slate-50), border halus, dan saat fokus berubah putih
+ * dengan cincin biru brand.
+ * ========================================================= */
+.vg-settings__content .vg-input {
+  height: 46px;
+  background: var(--slate-50);
+  border: 1px solid var(--border-soft);
+  color: var(--text-strong);
+  font-weight: var(--font-weight-semibold);
+}
+
+.vg-settings__content .vg-input::placeholder {
+  color: var(--text-soft);
+  font-weight: var(--font-weight-medium);
+}
+
+.vg-settings__content .vg-input:hover {
+  background: var(--surface-white);
+  border-color: var(--brand-blue-300);
+}
+
+.vg-settings__content .vg-input:focus {
+  background: var(--surface-white);
+  border-color: var(--brand-blue-500);
+  box-shadow: 0 0 0 4px rgba(31, 122, 214, 0.12);
+}
+
+/* Label & hint sedikit dirapikan agar selaras dengan input terang */
+.vg-settings__content .vg-field__label {
+  color: var(--text-base);
+  letter-spacing: 0.05em;
+}
+
+/* ============================================================
+ * Section helpers (icon di pojok kanan title)
+ * ========================================================= */
+.vg-section__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vg-section__icon--yellow {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  color: #b45309;
+}
+.vg-section__icon--blue {
+  background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+  color: var(--brand-blue-600);
+}
+.vg-section__icon--violet {
+  background: linear-gradient(135deg, #f3e8ff, #e9d5ff);
+  color: #7c3aed;
+}
+.vg-section__icon--green {
+  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+  color: #059669;
+}
+
+.vg-section__head-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* ============================================================
+ * Tariff cards (radio-style)
+ * ========================================================= */
+.vg-tariff__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.vg-tariff__card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  text-align: left;
+  padding: var(--space-4);
+  background: var(--surface-white);
+  border: 1.5px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.vg-tariff__card:hover {
+  border-color: var(--brand-blue-300);
+  background: var(--slate-50);
+}
+
+.vg-tariff__card--active {
+  border-color: var(--brand-blue-500);
+  background: var(--brand-blue-50);
+  box-shadow: 0 0 0 4px rgba(33, 150, 243, 0.1);
+}
+
+.vg-tariff__label {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-strong);
+}
+
+.vg-tariff__cat {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  font-weight: var(--font-weight-medium);
+}
+
+.vg-tariff__rec {
+  padding: 2px 6px;
+  font-size: 10px;
+}
+
+.vg-tariff__price {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  color: var(--brand-blue-600);
+  margin-top: var(--space-1);
+}
+
+.vg-tariff__price-unit {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  font-weight: var(--font-weight-medium);
+  margin-left: 2px;
+}
+
+.vg-tariff__row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+/* ============================================================
+ * MQTT / kontrol-otomatis section grid
+ * ========================================================= */
+.vg-mqtt__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+/* ============================================================
+ * Notification section
+ * ========================================================= */
+.vg-notif__group-label {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: var(--space-1);
+}
+
+/* Pembungkus baris notifikasi — hapus border-top pada baris pertama */
+.vg-notif__rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.vg-notif__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) 0;
+  border-top: 1px solid var(--border-soft);
+}
+
+.vg-notif__row:first-child {
+  border-top: none;
+}
+
+.vg-notif__row strong {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-strong);
+  display: block;
+}
+
+.vg-notif__row p {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* ============================================================
+ * Save-bar lengket (satu tombol simpan untuk seluruh halaman)
+ * ========================================================= */
+.vg-savebar {
+  position: sticky;
+  bottom: var(--space-5);
+  z-index: 20;
+  margin-top: var(--space-2);
+  border-radius: var(--radius-lg);
+  background: var(--surface-white);
+  border: 1px solid var(--border-soft);
+  box-shadow: var(--shadow-lg);
+  /* Aksen kiri netral saat idle */
+  border-left: 4px solid var(--border-soft);
+  transition: border-color var(--transition-fast),
+    box-shadow var(--transition-fast), background var(--transition-fast);
+}
+
+/* Saat ada perubahan: aksen brand + sedikit highlight supaya menonjol */
+.vg-savebar--dirty {
+  border-left-color: var(--brand-blue-500);
+  background: linear-gradient(
+    90deg,
+    var(--brand-blue-50) 0%,
+    var(--surface-white) 40%
+  );
+  box-shadow: var(--shadow-brand);
+}
+
+.vg-savebar__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-5);
+}
+
+.vg-savebar__status {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.vg-savebar__status--idle {
+  color: var(--text-muted);
+}
+
+.vg-savebar__status--dirty {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--brand-blue-600);
+  font-weight: var(--font-weight-semibold);
+}
+
+.vg-savebar__status--ok {
+  color: var(--success-600, #059669);
+  font-weight: var(--font-weight-semibold);
+}
+
+.vg-savebar__status--warn {
+  color: #b45309;
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Titik berdenyut sebagai indikator perubahan tertunda */
+.vg-savebar__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--brand-blue-500);
+  flex-shrink: 0;
+  animation: vg-savebar-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes vg-savebar-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(31, 122, 214, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(31, 122, 214, 0);
+  }
+}
+
+.vg-savebar__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+/* ============================================================
+ * Responsive
+ * ========================================================= */
+@media (max-width: 960px) {
+  .vg-tariff__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .vg-tariff__row,
+  .vg-mqtt__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .vg-tariff__grid {
+    grid-template-columns: 1fr;
+  }
+  .vg-savebar__inner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+  }
+  .vg-savebar__actions {
+    width: 100%;
+  }
+  .vg-savebar__actions .vg-btn {
+    flex: 1;
+  }
+}

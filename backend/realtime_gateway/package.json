@@ -1,0 +1,17 @@
+{
+  "name": "kontrol-monitoring-realtime-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bridge MQTT dashboard/* topic ke koneksi WebSocket browser supaya dashboard update real-time tanpa polling.",
+  "main": "websocket_server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node websocket_server.js",
+    "check": "node --check websocket_server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "mqtt": "^5.10.3",
+    "ws": "^8.18.0"
+  }
+}

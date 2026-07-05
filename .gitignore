@@ -1,0 +1,38 @@
+# ── Node.js ─────────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-error.log
+
+# ── Frontend build ───────────────────────────────────────────────────────────
+frontend/dashboard/dist/
+
+# ── Environment / secrets ────────────────────────────────────────────────────
+# Jangan commit file .env yang berisi kredensial nyata.
+# Gunakan .env.example sebagai template.
+.env
+*.env
+!*.env.example
+
+# ── ESP32 / ESP-IDF build artifacts ─────────────────────────────────────────
+build/
+*.bin
+*.elf
+*.map
+sdkconfig.old
+managed_components/
+
+# ── Temporary & archive ──────────────────────────────────────────────────────
+*.tgz
+*.tar.gz
+*.zip
+do_sync.tgz
+
+# ── OS files ─────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Editor ───────────────────────────────────────────────────────────────────
+.vscode/settings.json
+*.swp
+*~

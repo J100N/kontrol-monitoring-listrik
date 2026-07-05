@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/kontrol_monitoring_listrik/payload_schema.json",
+  "title": "Smart Socket MQTT Payload Schema",
+  "description": "Skema payload utama untuk payload terenkripsi (telemetry/command), ack, dan status terpadu.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/encryptedPayload"
+    },
+    {
+      "$ref": "#/$defs/ackPayload"
+    },
+    {
+      "$ref": "#/$defs/statusPayload"
+    }
+  ],
+  "$defs": {
+    "deviceId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 64
+    },
+    "hexNonce": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{32}$"
+    },
+    "hexTag": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{32}$"
+    },
+    "hexCipher": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{2,}$"
+    },
+    "encryptedPayload": {
+      "type": "object",
+      "description": "Envelope terenkripsi dipakai 2 arah: telemetry (device->server, TANPA command_id) dan command (server->device, DENGAN command_id). Karena itu command_id bersifat opsional.",
+      "additionalProperties": false,
+      "required": [
+        "enc",
+        "device_id",
+        "kid",
+        "ctr",
+        "nonce",
+        "tag",
+        "cipher"
+      ],
+      "properties": {
+        "enc": {
+          "type": "integer",
+          "const": 1
+        },
+        "device_id": {
+          "$ref": "#/$defs/deviceId"
+        },
+        "kid": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "ctr": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "nonce": {
+          "$ref": "#/$defs/hexNonce"
+        },
+        "tag": {
+          "$ref": "#/$defs/hexTag"
+        },
+        "cipher": {
+          "$ref": "#/$defs/hexCipher"
+        },
+        "command_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        }
+      }
+    },
+    "ackPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["device_id", "command_id", "status", "message"],
+      "properties": {
+        "device_id": {
+          "$ref": "#/$defs/deviceId"
+        },
+        "command_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "status": {
+          "type": "string",
+          "enum": ["ok", "error"]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      }
+    },
+    "statusPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["device_id", "status_type", "status"],
+      "properties": {
+        "device_id": {
+          "$ref": "#/$defs/deviceId"
+        },
+        "status_type": {
+          "type": "string",
+          "enum": ["relay", "connectivity"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["ON", "OFF", "ONLINE", "OFFLINE"]
+        }
+      }
+    }
+  }
+}

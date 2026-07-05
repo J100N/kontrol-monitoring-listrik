@@ -1,0 +1,63 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build Device 1 (smart_socket)",
+      "type": "shell",
+      "command": "C:\\Espressif\\python_env\\idf5.3_py3.12_env\\Scripts\\python.exe",
+      "args": [
+        "C:/Users/LENOVO/esp/v5.3.1/esp-idf/tools/idf.py",
+        "-B",
+        "build",
+        "-DDEVICE_VARIANT=smart_socket",
+        "build"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "IDF_PATH": "C:\\Users\\LENOVO\\esp\\v5.3.1\\esp-idf",
+          "IDF_PYTHON_ENV_PATH": "C:\\Espressif\\python_env\\idf5.3_py3.12_env",
+          "CMAKE_BUILD_PARALLEL_LEVEL": "1",
+          "Path": "C:\\Espressif\\python_env\\idf5.3_py3.12_env\\Scripts;C:\\Espressif\\tools\\cmake\\3.24.0\\bin;C:\\Espressif\\tools\\ninja\\1.11.1;C:\\Espressif\\tools\\xtensa-esp-elf\\esp-13.2.0_20240530\\xtensa-esp-elf\\bin;C:\\Espressif\\tools\\riscv32-esp-elf\\esp-13.2.0_20240530\\riscv32-esp-elf\\bin;C:\\Users\\LENOVO\\esp\\v5.3.1\\esp-idf\\tools;${env:Path}"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true,
+        "showReuseMessage": false
+      },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Rebuild Device 1 Clean (smart_socket)",
+      "type": "shell",
+      "command": "C:\\Espressif\\python_env\\idf5.3_py3.12_env\\Scripts\\python.exe",
+      "args": [
+        "C:/Users/LENOVO/esp/v5.3.1/esp-idf/tools/idf.py",
+        "-B",
+        "build",
+        "-DDEVICE_VARIANT=smart_socket",
+        "fullclean",
+        "build"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "IDF_PATH": "C:\\Users\\LENOVO\\esp\\v5.3.1\\esp-idf",
+          "IDF_PYTHON_ENV_PATH": "C:\\Espressif\\python_env\\idf5.3_py3.12_env",
+          "CMAKE_BUILD_PARALLEL_LEVEL": "1",
+          "Path": "C:\\Espressif\\python_env\\idf5.3_py3.12_env\\Scripts;C:\\Espressif\\tools\\cmake\\3.24.0\\bin;C:\\Espressif\\tools\\ninja\\1.11.1;C:\\Espressif\\tools\\xtensa-esp-elf\\esp-13.2.0_20240530\\xtensa-esp-elf\\bin;C:\\Espressif\\tools\\riscv32-esp-elf\\esp-13.2.0_20240530\\riscv32-esp-elf\\bin;C:\\Users\\LENOVO\\esp\\v5.3.1\\esp-idf\\tools;${env:Path}"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true,
+        "showReuseMessage": false
+      },
+      "problemMatcher": []
+    }
+  ]
+}

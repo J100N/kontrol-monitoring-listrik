@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "devices": {
+    "smart_socket": {
+      "device_id": "smart_socket",
+      "label": "Soket Pintar",
+      "room": "",
+      "mode": "manual",
+      "power_threshold_w": 10,
+      "pir_timeout_sec": 600,
+      "created_at": 1714694400000,
+      "updated_at": 1777858096468,
+      "last_seen_at": null,
+      "online": false
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "compilerOptions": {
+    "checkJs": false
+  },
+  "include": ["integration", "e2e"],
+  "exclude": ["node_modules"]
+}

@@ -1,0 +1,169 @@
+name: kontrol-monitoring-listrik
+
+services:
+  emqx:
+    image: emqx/emqx:${EMQX_VERSION:-5.8.3}
+    container_name: emqx
+    restart: unless-stopped
+    environment:
+      EMQX_DASHBOARD__DEFAULT_USERNAME: ${EMQX_DASHBOARD_USERNAME:-admin}
+      EMQX_DASHBOARD__DEFAULT_PASSWORD: ${EMQX_DASHBOARD_PASSWORD:-public}
+      EMQX_LISTENERS__TCP__DEFAULT__BIND: 0.0.0.0:1883
+      EMQX_DASHBOARD__LISTENERS__HTTP__BIND: 0.0.0.0:18083
+      EMQX_NODE__DATA_DIR: /opt/emqx/data
+    ports:
+      - "${EMQX_MQTT_PORT:-1883}:1883"
+      - "${EMQX_DASHBOARD_PORT:-18083}:18083"
+    volumes:
+      - emqx_data:/opt/emqx/data
+      - emqx_log:/opt/emqx/log
+    networks:
+      - backend_net
+    healthcheck:
+      test: ["CMD-SHELL", "emqx ctl status >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 45s
+
+  influxdb:
+    image: influxdb:${INFLUXDB_VERSION:-2.7}
+    container_name: influxdb
+    restart: unless-stopped
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUXDB_ADMIN_USERNAME:-admin}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_ADMIN_PASSWORD:-change_me_please}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUXDB_ORG:-ta_org}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUXDB_BUCKET:-telemetry}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_ADMIN_TOKEN:-replace_with_secure_token}
+    ports:
+      - "${INFLUXDB_PORT:-8086}:8086"
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+      - influxdb_config:/etc/influxdb2
+    networks:
+      - backend_net
+    healthcheck:
+      test: ["CMD", "influx", "ping", "-host", "http://localhost:8086"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 25s
+
+  mqtt_worker:
+    image: node:20-alpine
+    container_name: mqtt_worker
+    restart: unless-stopped
+    working_dir: /app
+    command: sh -c "npm install --omit=dev && npm start"
+    env_file:
+      - ./mqtt_worker.env
+    depends_on:
+      emqx:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+    volumes:
+      - ${MQTT_WORKER_SRC:-../../backend/mqtt_worker}:/app
+      - ${COMMON_SRC:-../../backend/common}:/common:ro
+      - ${SHARED_PROTOCOL_SRC:-../../firmware/shared_protocol}:/shared_protocol:ro
+      - ${DEVICE_REGISTRY_DIR:-../../database/device_registry}:/data/device_registry
+    networks:
+      - backend_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9101/healthz || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 25s
+    profiles:
+      - app
+
+  api:
+    image: node:20-alpine
+    container_name: api
+    restart: unless-stopped
+    working_dir: /app
+    command: sh -c "npm install --omit=dev && npm start"
+    env_file:
+      - ./api.env
+    depends_on:
+      emqx:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+    volumes:
+      - ${API_SRC:-../../backend/api}:/app
+      - ${COMMON_SRC:-../../backend/common}:/common:ro
+      - ${DEVICE_REGISTRY_DIR:-../../database/device_registry}:/data/device_registry
+    ports:
+      - "${API_PORT:-8080}:8080"
+    networks:
+      - backend_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 25s
+    profiles:
+      - app
+
+  realtime_gateway:
+    image: node:20-alpine
+    container_name: realtime_gateway
+    restart: unless-stopped
+    working_dir: /app
+    command: sh -c "npm install --omit=dev && npm start"
+    env_file:
+      - ./realtime_gateway.env
+    depends_on:
+      emqx:
+        condition: service_healthy
+    volumes:
+      - ${REALTIME_SRC:-../../backend/realtime_gateway}:/app
+      - ${COMMON_SRC:-../../backend/common}:/common:ro
+    ports:
+      - "${WS_PORT:-8090}:8090"
+    networks:
+      - backend_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8090/healthz || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    profiles:
+      - app
+
+  dashboard:
+    image: nginx:1.27-alpine
+    container_name: dashboard
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+      realtime_gateway:
+        condition: service_started
+    volumes:
+      - ${FRONTEND_DIST:-../../frontend/dashboard/dist}:/usr/share/nginx/html:ro
+      - ./nginx/dashboard.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    ports:
+      - "${DASHBOARD_PORT:-80}:80"
+      - "443:443"
+    networks:
+      - backend_net
+    profiles:
+      - app
+
+volumes:
+  emqx_data:
+  emqx_log:
+  influxdb_data:
+  influxdb_config:
+
+networks:
+  backend_net:
+    driver: bridge
