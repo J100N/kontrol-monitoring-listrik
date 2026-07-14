@@ -448,6 +448,21 @@ static void mqtt_command_callback(const char *topic, const uint8_t *payload, siz
     char command_id[32] = {0};
     char cmd[64] = {0};
 
+#if EXPERIMENT_NO_ENCRYPTION
+    // ================= MODE EKSPERIMEN: TANPA ENKRIPSI =================
+    // Perangkat menerima perintah PLAINTEXT apa adanya (mis. "relay_on" atau
+    // {"command":"relay_on"}) TANPA parse envelope, TANPA decrypt, TANPA cek
+    // tag autentikasi maupun anti-replay. Merepresentasikan kondisi sistem
+    // tanpa fitur keamanan — untuk baseline uji injeksi/replay/tampering.
+    {
+        size_t n = (payload_len < sizeof(cmd) - 1U) ? payload_len : sizeof(cmd) - 1U;
+        memcpy(cmd, payload, n);
+        cmd[n] = '\0';
+        strncpy(command_id, "plain-cmd", sizeof(command_id) - 1U);
+        ESP_LOGW(TAG, "[%s] [NO-ENC] Perintah PLAINTEXT diterima TANPA verifikasi: %s", DEVICE_ID, cmd);
+    }
+#else
+    // ================= MODE PRODUKSI: ASCON-AEAD128 =================
     telemetry_encrypted_command_t enc_cmd = {0};
     if (telemetry_parse_encrypted_command(payload, payload_len, &enc_cmd) != ESP_OK) {
         ESP_LOGW(TAG, "[%s] Format command tidak valid (wajib format encrypted baru)", DEVICE_ID);
@@ -470,6 +485,7 @@ static void mqtt_command_callback(const char *topic, const uint8_t *payload, siz
         DEVICE_ID,
         (unsigned long)key_id,
         (unsigned long long)counter);
+#endif
 
     // Jika command dikirim sebagai JSON sederhana, ekstrak field "command".
     if (cmd[0] == '{') {

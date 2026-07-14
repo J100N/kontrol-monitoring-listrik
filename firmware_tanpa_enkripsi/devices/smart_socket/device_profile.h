@@ -6,6 +6,17 @@
 #define WIFI_STA_PASSWORD "GANTI_PASSWORD_WIFI"
 #define WIFI_MAX_RETRY 10U
 
+// ============================================================================
+// >>> FOLDER INI KHUSUS KONDISI "TANPA ENKRIPSI" (baseline uji keamanan TA) <<<
+//   Flag di-set 1: command handler menerima perintah PLAINTEXT tanpa parse
+//   envelope, decrypt, cek tag, maupun anti-replay. Dipakai untuk mengumpulkan
+//   data serangan injeksi/replay/tampering pada kondisi tanpa fitur enkripsi.
+//   (Firmware PRODUKSI ada di folder `firmware/` dengan ASCON-AEAD128 aktif.)
+// ============================================================================
+#ifndef EXPERIMENT_NO_ENCRYPTION
+#define EXPERIMENT_NO_ENCRYPTION 1
+#endif
+
 // Konfigurasi broker MQTT (EMQX) untuk device ini.
 #define MQTT_BROKER_URI "mqtt://167.71.195.81:1883"
 #define MQTT_USERNAME "dev_socket_01"
