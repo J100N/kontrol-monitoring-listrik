@@ -8,6 +8,7 @@
 #include "device_state.h"
 #include "esp_err.h"
 #include "esp_log.h"
+#include "esp_mac.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -30,6 +31,8 @@
 static const char *TAG = "app_main";
 static uint32_t s_ack_seq    = 0;
 static ascon_ctx_t s_ascon   = {0};
+static char s_mqtt_client_id[40] = {0};  // client_id MQTT unik per perangkat (diisi saat boot)
+static float s_last_energy_wh = 0.0f;    // energi kumulatif terakhir (dipertahankan saat relay OFF)
 static uint8_t s_batch_count = 0;
 
 static void wifi_event_callback(wifi_manager_event_t event, void *event_data, void *user_ctx);
@@ -303,11 +306,21 @@ static void connectivity_task(void *arg)
         .max_retry = WIFI_MAX_RETRY,
     };
 
+    // Bentuk client_id MQTT UNIK per perangkat: DEVICE_ID + 3 byte terakhir MAC.
+    // client_id yang sama antar-koneksi membuat broker saling menendang (takeover)
+    // sehingga MQTT putus-nyambung terus. device_id & nama topik TETAP "smart_socket";
+    // hanya identitas koneksi MQTT yang dibuat unik agar tidak tabrakan.
+    uint8_t mac_sta[6] = {0};
+    esp_read_mac(mac_sta, ESP_MAC_WIFI_STA);
+    snprintf(s_mqtt_client_id, sizeof(s_mqtt_client_id), "%s_%02X%02X%02X",
+             DEVICE_ID, mac_sta[3], mac_sta[4], mac_sta[5]);
+    ESP_LOGI(TAG, "[%s] MQTT client_id unik: %s", DEVICE_ID, s_mqtt_client_id);
+
     mqtt_app_config_t mqtt_cfg = {
         .broker_uri = MQTT_BROKER_URI,
         .username = MQTT_USERNAME,
         .password = MQTT_PASSWORD,
-        .client_id = MQTT_CLIENT_ID,
+        .client_id = s_mqtt_client_id,
         .device_id = DEVICE_ID,
         .topic_command = MQTT_TOPIC_COMMAND,
         .topic_telemetry = MQTT_TOPIC_TELEMETRY,
@@ -435,6 +448,21 @@ static void mqtt_command_callback(const char *topic, const uint8_t *payload, siz
     char command_id[32] = {0};
     char cmd[64] = {0};
 
+#if EXPERIMENT_NO_ENCRYPTION
+    // ================= MODE EKSPERIMEN: TANPA ENKRIPSI =================
+    // Perangkat menerima perintah PLAINTEXT apa adanya (mis. "relay_on" atau
+    // {"command":"relay_on"}) TANPA parse envelope, TANPA decrypt, TANPA cek
+    // tag autentikasi maupun anti-replay. Merepresentasikan kondisi sistem
+    // tanpa fitur keamanan — untuk baseline uji injeksi/replay/tampering.
+    {
+        size_t n = (payload_len < sizeof(cmd) - 1U) ? payload_len : sizeof(cmd) - 1U;
+        memcpy(cmd, payload, n);
+        cmd[n] = '\0';
+        strncpy(command_id, "plain-cmd", sizeof(command_id) - 1U);
+        ESP_LOGW(TAG, "[%s] [NO-ENC] Perintah PLAINTEXT diterima TANPA verifikasi: %s", DEVICE_ID, cmd);
+    }
+#else
+    // ================= MODE PRODUKSI: ASCON-AEAD128 =================
     telemetry_encrypted_command_t enc_cmd = {0};
     if (telemetry_parse_encrypted_command(payload, payload_len, &enc_cmd) != ESP_OK) {
         ESP_LOGW(TAG, "[%s] Format command tidak valid (wajib format encrypted baru)", DEVICE_ID);
@@ -457,6 +485,7 @@ static void mqtt_command_callback(const char *topic, const uint8_t *payload, siz
         DEVICE_ID,
         (unsigned long)key_id,
         (unsigned long long)counter);
+#endif
 
     // Jika command dikirim sebagai JSON sederhana, ekstrak field "command".
     if (cmd[0] == '{') {
@@ -545,6 +574,19 @@ static void mqtt_command_callback(const char *topic, const uint8_t *payload, siz
         } else {
             ack_status = "error";
             ack_msg = "parameter config_update tidak valid";
+        }
+    } else if (strcmp(cmd, "reset_energy") == 0) {
+        // Reset akumulator energi PZEM ke 0. PZEM hanya bertenaga saat relay ON;
+        // bila relay OFF, PZEM tak merespons → timeout → laporkan lewat ACK.
+        esp_err_t r = pzem_reset_energy();
+        if (r == ESP_OK) {
+            ack_msg = "energi direset ke 0";
+            ESP_LOGI(TAG, "[%s] Energi PZEM direset ke 0 via perintah dashboard", DEVICE_ID);
+        } else {
+            ack_status = "error";
+            ack_msg = (r == ESP_ERR_TIMEOUT)
+                          ? "reset energi gagal: PZEM tak merespons (pastikan relay ON)"
+                          : "reset energi gagal";
         }
     } else if (strcmp(cmd, "ping") == 0) {
         ack_msg = "pong";
@@ -726,27 +768,15 @@ void app_main(void)
         pzem_data_t data = {0};
         bool relay_is_on = relay_get_state();
         bool pzem_ok = false;
+        bool build_sample = false;  // apakah siklus ini menghasilkan sampel telemetri
 
         if (relay_is_on) {
             pzem_ret = pzem_read_data(&data);
             pzem_ok = (pzem_ret == ESP_OK);
 
             if (pzem_ok) {
-                int64_t sample_ts_ms = 0;
-                if (time_sync_get_epoch_ms(&sample_ts_ms) != ESP_OK) { //time stamp untuk telemetry, gunakan time sync jika tersedia, fallback ke uptime jika belum sync
-                    sample_ts_ms = esp_timer_get_time() / 1000LL;
-                }
-
-                telemetry_power_sample_t sample = {
-                    .voltage_v = data.voltage_v,
-                    .current_a = data.current_a,
-                    .power_w = data.power_w,
-                    .energy_wh = data.energy_wh,
-                    .frequency_hz = data.frequency_hz,
-                    .power_factor = data.power_factor,
-                    .alarm_status = data.alarm_status,
-                    .ts_ms = sample_ts_ms,
-                };
+                s_last_energy_wh = data.energy_wh;  // simpan energi kumulatif terakhir
+                build_sample = true;
 
                 ESP_LOGI(
                     TAG,
@@ -759,32 +789,56 @@ void app_main(void)
                     data.frequency_hz,
                     data.power_factor,
                     data.alarm_status);
-
-                telemetry_buffer_push(&sample);
-                s_batch_count++;
-
-                /* Setiap 10 sampel terkumpul (= 10 detik), kirim sekaligus ke server. */
-                if (s_batch_count >= TELEMETRY_BATCH_SIZE) {
-                    if (mqtt_app_is_connected()) {
-                        if (telemetry_buffer_flush() != ESP_OK) {
-                            ESP_LOGW(
-                                TAG,
-                                "[%s] Kirim batch tertunda, antrian=%u sampel",
-                                DEVICE_ID,
-                                (unsigned)s_telemetry_buffer.count);
-                        }
-                    }
-                    s_batch_count = 0;
-                    // Simpan kemajuan counter ke NVS (hemat tulis: hanya saat mendekati batas).
-                    ascon_ctr_nvs_maybe_save(ascon_get_tx_counter(&s_ascon));
-                }
             } else {
                 // Relay ON tapi PZEM tak merespons → ini benar-benar fault sensor/wiring.
                 ESP_LOGW(TAG, "[%s] Baca PZEM gagal: %s", DEVICE_ID, esp_err_to_name(pzem_ret));
             }
         } else {
-            // Relay OFF → listrik terputus, PZEM memang mati. Tidak dibaca, daya = 0.
-            ESP_LOGD(TAG, "[%s] Relay OFF — PZEM tidak dibaca (listrik terputus), daya dianggap 0W", DEVICE_ID);
+            // Relay OFF → listrik terputus, PZEM memang mati. Tetap kirim sampel
+            // bernilai 0 (dengan energi kumulatif dipertahankan) agar last_seen di
+            // server tetap segar → dashboard menampilkan perangkat tetap ONLINE.
+            build_sample = true;
+            ESP_LOGD(TAG, "[%s] Relay OFF — daya 0W, kirim sampel heartbeat (energi dipertahankan)", DEVICE_ID);
+        }
+
+        if (build_sample) {
+            int64_t sample_ts_ms = 0;
+            if (time_sync_get_epoch_ms(&sample_ts_ms) != ESP_OK) {
+                // time sync belum siap → fallback ke uptime (server yang mengoreksi)
+                sample_ts_ms = esp_timer_get_time() / 1000LL;
+            }
+
+            // Relay ON & PZEM OK → nilai nyata; relay OFF → nilai 0, KECUALI energi
+            // yang tetap memakai nilai kumulatif terakhir (energi tak boleh reset).
+            telemetry_power_sample_t sample = {
+                .voltage_v    = pzem_ok ? data.voltage_v    : 0.0f,
+                .current_a    = pzem_ok ? data.current_a    : 0.0f,
+                .power_w      = pzem_ok ? data.power_w      : 0.0f,
+                .energy_wh    = pzem_ok ? data.energy_wh    : s_last_energy_wh,
+                .frequency_hz = pzem_ok ? data.frequency_hz : 0.0f,
+                .power_factor = pzem_ok ? data.power_factor : 0.0f,
+                .alarm_status = pzem_ok ? data.alarm_status : 0,
+                .ts_ms        = sample_ts_ms,
+            };
+
+            telemetry_buffer_push(&sample);
+            s_batch_count++;
+
+            /* Setiap 10 sampel terkumpul (= 10 detik), kirim sekaligus ke server. */
+            if (s_batch_count >= TELEMETRY_BATCH_SIZE) {
+                if (mqtt_app_is_connected()) {
+                    if (telemetry_buffer_flush() != ESP_OK) {
+                        ESP_LOGW(
+                            TAG,
+                            "[%s] Kirim batch tertunda, antrian=%u sampel",
+                            DEVICE_ID,
+                            (unsigned)s_telemetry_buffer.count);
+                    }
+                }
+                s_batch_count = 0;
+                // Simpan kemajuan counter ke NVS (hemat tulis: hanya saat mendekati batas).
+                ascon_ctr_nvs_maybe_save(ascon_get_tx_counter(&s_ascon));
+            }
         }
 
         // ===== Auto-control + PIR SELALU dievaluasi tiap loop =====

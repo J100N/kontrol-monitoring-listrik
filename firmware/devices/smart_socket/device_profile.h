@@ -2,9 +2,22 @@
 #define DEVICE_PROFILE_H
 
 #define DEVICE_ID "smart_socket"
-#define WIFI_STA_SSID "pujiono"
-#define WIFI_STA_PASSWORD "satuduatiga"
+#define WIFI_STA_SSID "nama_wifi"
+#define WIFI_STA_PASSWORD "GANTI_PASSWORD_WIFI"
 #define WIFI_MAX_RETRY 10U
+
+// ============================================================================
+// HANYA untuk pengujian keamanan "kondisi TANPA enkripsi".
+//   0 = PRODUKSI (DEFAULT): perintah WAJIB terenkripsi ASCON-AEAD128.
+//   1 = EKSPERIMEN: perangkat menerima perintah PLAINTEXT tanpa verifikasi apa pun
+//       (untuk mengumpulkan data baseline injeksi/replay/tampering di TA).
+// Cara pakai: set 1 -> build -> flash -> kumpulkan data serangan; lalu KEMBALIKAN
+// ke 0 dan flash ulang agar perangkat kembali ke sistem produksi. JANGAN deploy
+// nyata dengan nilai 1.
+// ============================================================================
+#ifndef EXPERIMENT_NO_ENCRYPTION
+#define EXPERIMENT_NO_ENCRYPTION 0
+#endif
 
 // Konfigurasi broker MQTT (EMQX) untuk device ini.
 #define MQTT_BROKER_URI "mqtt://167.71.195.81:1883"
