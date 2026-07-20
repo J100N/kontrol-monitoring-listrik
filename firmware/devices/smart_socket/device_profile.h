@@ -1,15 +1,21 @@
 #ifndef DEVICE_PROFILE_H
 #define DEVICE_PROFILE_H
 
+// Kredensial (Wi-Fi, MQTT, kunci ASCON) dipisah ke device_secrets.h yang tidak
+// ikut di-commit. Salin device_secrets.h.example menjadi device_secrets.h lalu
+// isi nilai aslinya sebelum build.
+#if defined(__has_include)
+#  if !__has_include("device_secrets.h")
+#    error "device_secrets.h tidak ditemukan. Salin device_secrets.h.example menjadi device_secrets.h lalu isi kredensialnya."
+#  endif
+#endif
+#include "device_secrets.h"
+
 #define DEVICE_ID "smart_socket"
-#define WIFI_STA_SSID "nama_wifi"
-#define WIFI_STA_PASSWORD "GANTI_PASSWORD_WIFI"
 #define WIFI_MAX_RETRY 10U
 
 // Konfigurasi broker MQTT (EMQX) untuk device ini.
-#define MQTT_BROKER_URI "mqtt://167.71.195.81:1883"
-#define MQTT_USERNAME "dev_socket_01"
-#define MQTT_PASSWORD "ganti_password_mqtt"
+#define MQTT_BROKER_URI "mqtt://" MQTT_BROKER_HOST ":1883"
 #define MQTT_CLIENT_ID DEVICE_ID
 
 // Topik command/telemetry/status/ack per-device.
@@ -22,14 +28,8 @@
 // Last Will payload saat device terputus tidak normal.
 #define MQTT_LWT_PAYLOAD "{\"device_id\":\"" DEVICE_ID "\",\"status_type\":\"connectivity\",\"status\":\"OFFLINE\"}"
 
-// Konfigurasi kunci simetris ASCON-128 (16 byte).
+// Kunci simetris ASCON-128 (ASCON_KEY_ID & ASCON_KEY_BYTES) ada di device_secrets.h.
 // TODO produksi: pindahkan key ke secure provisioning/NVS, jangan hardcode source.
-#define ASCON_KEY_ID 1U
-#define ASCON_KEY_BYTES \
-	{               \
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, \
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00  \
-	}
 
 // Parameter kontrol otomatis:
 // - Auto OFF hanya jika no-motion kontinu >= 10 menit (600 detik)

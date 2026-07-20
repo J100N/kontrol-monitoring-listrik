@@ -14,6 +14,10 @@ frontend/dashboard/dist/
 *.env
 !*.env.example
 
+# Kredensial firmware per-device (Wi-Fi, MQTT, kunci ASCON).
+# Gunakan device_secrets.h.example sebagai template.
+device_secrets.h
+
 # ── ESP32 / ESP-IDF build artifacts ─────────────────────────────────────────
 build/
 *.bin

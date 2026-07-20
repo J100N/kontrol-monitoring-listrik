@@ -17,7 +17,7 @@ Disusun untuk lampiran Tugas Akhir. Target uji: segmen komunikasi
 | Posisi penyerang | Host di Wi-Fi yang sama dengan ESP32 & broker |
 | ARP poisoning | `arpspoof -i wlan0 -t <IP_ESP32> <IP_gateway>` (+ arah sebaliknya) |
 | Sniffing | Wireshark, filter `mqtt` atau `tcp.port == 1883` |
-| Klien serang | MQTTX → host `167.71.195.81`, port `1883`, user `pujiono`, pass `GANTI_PASSWORD_MQTT` |
+| Klien serang | MQTTX → host `<IP_BROKER>`, port `1883`, kredensial broker (tidak dicantumkan) |
 
 ---
 

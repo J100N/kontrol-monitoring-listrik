@@ -1,11 +1,19 @@
 const mqtt = require("mqtt");
 
-const BROKER = "mqtt://167.71.195.81:1883";
+// Kredensial diambil dari environment, jangan ditulis di source.
+// Contoh (PowerShell):
+//   $env:MQTT_BROKER="mqtt://<host>:1883"; $env:MQTT_USER="..."; $env:MQTT_PASS="..."
+const BROKER = process.env.MQTT_BROKER;
 const CMD_TOPIC = "devices/sim_plain/command";
 
+if (!BROKER || !process.env.MQTT_USER || !process.env.MQTT_PASS) {
+  console.log("[ERROR] set dulu MQTT_BROKER, MQTT_USER, dan MQTT_PASS di environment");
+  process.exit(1);
+}
+
 const client = mqtt.connect(BROKER, {
-  username: "pujiono",
-  password: "GANTI_PASSWORD_MQTT",
+  username: process.env.MQTT_USER,
+  password: process.env.MQTT_PASS,
   clientId: "penyerang_" + Math.random().toString(16).slice(2, 8),
   connectTimeout: 10000,
 });

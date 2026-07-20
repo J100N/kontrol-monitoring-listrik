@@ -17,9 +17,17 @@
 
 const mqtt = require("mqtt");
 
-const BROKER = "mqtt://167.71.195.81:1883";
-const USERNAME = "pujiono";
-const PASSWORD = "GANTI_PASSWORD_MQTT";
+// Kredensial diambil dari environment, jangan ditulis di source.
+// Contoh (PowerShell):
+//   $env:MQTT_BROKER="mqtt://<host>:1883"; $env:MQTT_USER="..."; $env:MQTT_PASS="..."
+const BROKER = process.env.MQTT_BROKER;
+const USERNAME = process.env.MQTT_USER;
+const PASSWORD = process.env.MQTT_PASS;
+
+if (!BROKER || !USERNAME || !PASSWORD) {
+  console.log("[ERROR] set dulu MQTT_BROKER, MQTT_USER, dan MQTT_PASS di environment");
+  process.exit(1);
+}
 const CMD_TOPIC = "devices/sim_plain/command"; // TOPIK TERPISAH — bukan device asli
 const STATUS_TOPIC = "devices/sim_plain/relay/status"; // status relay hasil eksekusi
 const ACK_TOPIC = "devices/sim_plain/ack"; // balasan konfirmasi ke penyerang
