@@ -89,6 +89,10 @@ const EVENTS_PER_PAGE = 6;
 // di halaman Security agar tidak tumpang tindih.
 const OPERATIONAL_CATEGORIES = new Set<AuditCategory>(["CTRL", "SYS", "MQTT"]);
 
+// Kategori KEAMANAN — ditampilkan pada section "Log Keamanan" di bawah Log Event
+// Device (upaya serangan yang ditolak: injeksi, replay, tampering).
+const SECURITY_CATEGORIES = new Set<AuditCategory>(["SEC", "WARN", "AUTH"]);
+
 // Sistem 1 socket — aksen warna tunggal (biru). Fallback "blue" untuk id apa pun.
 const DEVICE_ACCENT: Record<string, string> = {
   smart_socket: "blue",
@@ -141,13 +145,14 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
   const [timeRange, setTimeRange] = useState<DetailTimeRange>("24J");
   const [metricLabel, setMetricLabel] = useState<MetricLabel>("Daya");
   const { points, loading: histLoading } = useTelemetryHistory(id, timeRange);
-  const { events, loading: evtLoading }  = useDeviceEvents(id, "7d", 50);
+  const { events, loading: evtLoading }  = useDeviceEvents(id, "7d", 200);
   const { send, sending } = useCommand();
-  const { sendConfig, setMode, loading: patching } = usePatchDevice();
+  const { sendConfig, setMode, resetEnergy, loading: patching } = usePatchDevice();
 
   // Tarif tersimpan (dari Settings) untuk estimasi biaya — sinkron dengan golongan.
   const tariffId = useSettingsStore((s) => s.saved.tariffId);
   const ppjPct   = useSettingsStore((s) => s.saved.ppj);
+  const bebanBulanan = useSettingsStore((s) => s.saved.bebanBulanan);
 
   // Local UI state — dibaca dari device, disinkronkan saat device berubah
   const [relayOn,       setRelayOnLocal]  = useState(false);
@@ -161,6 +166,7 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
   const [pirInput,        setPirInput]       = useState("600");
   const [configDirty,   setConfigDirty]     = useState(false);
   const [saveMsg,       setSaveMsg]       = useState<string | null>(null);
+  const [resetMsg,      setResetMsg]      = useState<string | null>(null);
   const [eventsPage,    setEventsPage]    = useState(1);
 
   // Hanya event operasional, diurutkan terbaru di atas (untuk paginasi log).
@@ -169,6 +175,16 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
       events
         .filter((e) => OPERATIONAL_CATEGORIES.has(e.category))
         .sort((a, b) => (b.ts ?? 0) - (a.ts ?? 0)),
+    [events],
+  );
+
+  // Event KEAMANAN (penolakan serangan), terbaru di atas, dibatasi 20 entri.
+  const securityEvents = useMemo(
+    () =>
+      events
+        .filter((e) => SECURITY_CATEGORIES.has(e.category))
+        .sort((a, b) => (b.ts ?? 0) - (a.ts ?? 0))
+        .slice(0, 20),
     [events],
   );
 
@@ -287,19 +303,30 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
 
   // Harga per kWh mengikuti golongan tarif terpilih di Settings (fallback ke
   // opsi recommended bila id tak ditemukan), lalu ditambah PPJ (% pajak).
+  // Tagihan pascabayar memakai REKENING MINIMUM: tagihan = YANG LEBIH BESAR
+  // antara biaya energi dan biaya minimum bulanan (BUKAN dijumlahkan). Prabayar
+  // (token): biaya minimum = 0 → tagihan = murni biaya energi.
   const pricePerKwh =
     tariffOptions.find((o) => o.id === tariffId)?.pricePerKwh ??
     tariffOptions.find((o) => o.recommended)?.pricePerKwh ??
     tariffOptions[0].pricePerKwh;
   const ppjFactor = 1 + (Number(ppjPct) || 0) / 100;
-  const costEstimate = (device.energy * pricePerKwh * ppjFactor).toLocaleString(
-    "id-ID",
-    {
-      style: "currency",
-      currency: "IDR",
-      maximumFractionDigits: 0,
-    },
-  );
+  const biayaMinimum = Number(bebanBulanan) || 0;
+  const biayaEnergi = device.energy * pricePerKwh * ppjFactor;
+  const costEstimate = Math.max(biayaEnergi, biayaMinimum).toLocaleString("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  });
+
+  // Unit energi adaptif: saat masih kecil (< 1 kWh) tampilkan dalam Wh (resolusi
+  // native PZEM = 1 Wh) agar nilai kecil terbaca jelas & tidak terlihat "0";
+  // begitu >= 1 kWh, tampilkan dalam kWh (maks 3 desimal sesuai PZEM).
+  const energyWh = Math.round(device.energy * 1000);
+  const energyDisplay =
+    energyWh < 1000
+      ? { value: `${energyWh}`, unit: "Wh" }
+      : { value: `${device.energy}`, unit: "kWh" };
 
   // Paginasi log event: potong jadi beberapa halaman agar kartu tidak memanjang.
   const eventsTotalPages = Math.max(
@@ -320,6 +347,15 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
   // "0" tetap "0", "" tetap kosong) supaya field tak menyisakan nol pemandu.
   const sanitizeInt = (s: string) =>
     s.replace(/[^0-9]/g, "").replace(/^0+(?=\d)/, "");
+
+  // Versi desimal (untuk Threshold Watt): izinkan satu titik/koma desimal,
+  // terima koma sbg titik, buang nol pemandu (kecuali "0.").
+  const sanitizeDecimal = (s: string) =>
+    s
+      .replace(/,/g, ".")
+      .replace(/[^\d.]/g, "")
+      .replace(/(\..*)\./g, "$1")
+      .replace(/^0+(?=\d)/, "");
 
   // Hint menit hanya ditampilkan saat >= 60 dtk agar tidak redundan
   // (mis. "30 dtk (30 dtk)"). Pecahan menit dibulatkan 1 desimal.
@@ -372,6 +408,25 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
     );
     setConfigDirty(false);
     setTimeout(() => setSaveMsg(null), 3000);
+  };
+
+  const handleResetEnergy = async () => {
+    if (!id) return;
+    if (
+      !window.confirm(
+        "Reset akumulator energi (kWh) perangkat ke 0?\n" +
+          "Pastikan perangkat menyala (relay ON) agar reset berhasil.",
+      )
+    )
+      return;
+    setResetMsg(null);
+    const ok = await resetEnergy(id);
+    setResetMsg(
+      ok
+        ? "Perintah reset energi terkirim ke perangkat!"
+        : "Gagal mengirim perintah reset energi.",
+    );
+    setTimeout(() => setResetMsg(null), 4000);
   };
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -491,11 +546,47 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
         />
         <MetricTile
           label="Energi"
-          value={`${device.energy}`}
-          unit="kWh"
+          value={energyDisplay.value}
+          unit={energyDisplay.unit}
           color="#10b981"
           sub={`≈ ${costEstimate}`}
         />
+      </section>
+
+      {/* ── Aksi Energi: reset akumulator kWh pada perangkat ──────────── */}
+      <section
+        aria-label="Aksi energi"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          flexWrap: "wrap",
+          margin: "2px 0 4px",
+        }}
+      >
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={isOffline || patching}
+          onClick={handleResetEnergy}
+        >
+          ↺ Reset Energi (kWh)
+        </Button>
+        <span
+          style={{
+            fontSize: "0.85rem",
+            color: resetMsg
+              ? resetMsg.startsWith("Gagal")
+                ? "#dc2626"
+                : "#059669"
+              : "#9ca3af",
+          }}
+        >
+          {resetMsg ??
+            (isOffline
+              ? "Perangkat offline — aktif saat online & relay ON"
+              : "Menolkan akumulator energi (kWh) & biaya pada perangkat")}
+        </span>
       </section>
 
       {/* ================================================================
@@ -743,26 +834,38 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
                   <span className="vg-detail-config__field-val">
                     <input
                       type="text"
-                      inputMode="numeric"
+                      inputMode="decimal"
                       className="vg-detail-config__val-input"
-                      value={thresholdInput}
+                      value={thresholdInput === "" ? "0" : thresholdInput}
                       onChange={(e) => {
-                        const s = sanitizeInt(e.target.value);
+                        let s = sanitizeDecimal(e.target.value);
+                        if (Number(s) > 5000) s = "5000"; // batas skema API (0–5000 W)
                         setThresholdInput(s);
-                        setThreshold(s === "" ? 0 : Number(s));
+                        // "" → 0. sanitizeDecimal bisa menyisakan "." tunggal dan
+                        // Number(".") = NaN — jangan biarkan NaN bocor ke state yang
+                        // dipakai <input type="range"> (React warning + thumb lompat).
+                        const n = Number(s);
+                        setThreshold(Number.isFinite(n) ? n : 0);
                         setConfigDirty(true);
                       }}
                       disabled={isOffline}
-                      aria-label="Threshold standby dalam Watt (bisa diketik)"
+                      aria-label="Threshold standby dalam Watt (bisa diketik, boleh desimal)"
                     />
                     <span className="vg-detail-config__val-unit">W</span>
                   </span>
                 </div>
+                {/* Slider sengaja hanya 0–50 W: standby nyata selalu kecil, kalau
+                    direntang sampai batas skema (5000 W) nilai 10 W praktis mustahil
+                    disetel dengan digeser. Untuk nilai >50 W slider DINONAKTIFKAN —
+                    bukan sekadar terjepit di 50 — supaya menggesernya tidak diam-diam
+                    meruntuhkan angka yang sudah diketik; di atas 50 W nilainya diatur
+                    lewat kolom ketik (tetap divalidasi 0–5000 saat simpan). */}
                 <input
                   type="range"
                   min={0}
                   max={50}
-                  value={threshold}
+                  step={0.5}
+                  value={Math.min(threshold, 50)}
                   onChange={(e) => {
                     const n = Number(e.target.value);
                     setThreshold(n);
@@ -770,12 +873,14 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
                     setConfigDirty(true);
                   }}
                   className="vg-detail-slider"
-                  disabled={isOffline}
+                  disabled={isOffline || threshold > 50}
                   aria-label="Threshold standby dalam Watt"
                 />
                 <div className="vg-detail-config__field-limits">
                   <span>0 W</span>
-                  <span>50 W · ketik ↑5000</span>
+                  <span>
+                    {threshold > 50 ? "di atas 50 W — atur lewat ketik" : "50 W · ketik ↑5000"}
+                  </span>
                 </div>
               </div>
 
@@ -790,7 +895,8 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
                       className="vg-detail-config__val-input"
                       value={pirInput}
                       onChange={(e) => {
-                        const s = sanitizeInt(e.target.value);
+                        let s = sanitizeInt(e.target.value);
+                        if (Number(s) > 7200) s = "7200"; // batas skema API (5–7200 dtk)
                         setPirInput(s);
                         setPirTimeout(s === "" ? 0 : Number(s));
                         setConfigDirty(true);
@@ -801,12 +907,15 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
                     <span className="vg-detail-config__val-unit">dtk{pirMinuteHint}</span>
                   </span>
                 </div>
+                {/* max disamakan dgn batas skema API (7200 dtk); dulu 3600 sehingga
+                    nilai ketik 3600–7200 diam-diam diruntuhkan begitu slider digeser.
+                    value dijepit ke rentang agar nilai di luar batas tak bocor ke DOM. */}
                 <input
                   type="range"
                   min={5}
-                  max={3600}
+                  max={7200}
                   step={5}
-                  value={pirTimeout}
+                  value={Math.min(Math.max(pirTimeout, 5), 7200)}
                   onChange={(e) => {
                     const n = Number(e.target.value);
                     setPirTimeout(n);
@@ -819,7 +928,7 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
                 />
                 <div className="vg-detail-config__field-limits">
                   <span>5 dtk</span>
-                  <span>60 mnt</span>
+                  <span>120 mnt</span>
                 </div>
               </div>
 
@@ -925,6 +1034,50 @@ export function DeviceDetailPage({ deviceId }: { deviceId?: string } = {}) {
               </div>
             </div>
           )}
+        </Card>
+      </section>
+
+      {/* ── Log Keamanan: upaya serangan yang ditolak sistem ───────────── */}
+      <section className="vg-detail-events">
+        <Card
+          title="Log Keamanan"
+          subtitle="Upaya serangan yang ditolak — injeksi, tampering & replay perintah (tag ASCON-AEAD128 + counter anti-replay)"
+        >
+          <div className="vg-detail-events__wrap">
+            {evtLoading ? (
+              <p className="vg-detail-events__empty">Memuat log keamanan…</p>
+            ) : securityEvents.length === 0 ? (
+              <p className="vg-detail-events__empty">
+                Belum ada upaya serangan yang tercatat — komunikasi aman.
+              </p>
+            ) : (
+              <table className="vg-detail-events__table">
+                <thead>
+                  <tr>
+                    <th>WAKTU</th>
+                    <th>AKTIVITAS</th>
+                    <th>SUMBER</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {securityEvents.map((e, idx) => (
+                    <tr key={`sec-${e.ts ?? e.time}-${idx}`}>
+                      <td className="vg-detail-events__time">
+                        <span className="vg-detail-events__time-h">{e.time}</span>
+                        {e.date && (
+                          <span className="vg-detail-events__date">{e.date}</span>
+                        )}
+                      </td>
+                      <td className="vg-detail-events__msg">{e.message}</td>
+                      <td className="vg-detail-events__src">
+                        <code>{e.source}</code>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         </Card>
       </section>
     </>

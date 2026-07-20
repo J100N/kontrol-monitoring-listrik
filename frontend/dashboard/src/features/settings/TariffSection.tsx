@@ -66,30 +66,42 @@ export function TariffSection({ options }: TariffSectionProps) {
 
       <div className="vg-tariff__row">
         <TextInput
-          label="PPJ (Pajak)"
-          type="number"
-          value={draft.ppj}
-          onChange={(e) => setField("ppj", e.target.value)}
-          hint="% dari biaya pemakaian"
+          label="PPJ / Pajak (%)"
+          type="text"
+          inputMode="decimal"
+          value={draft.ppj === "" ? "0" : draft.ppj}
+          onChange={(e) => {
+            // Boleh desimal (terima koma/titik). Digit & satu titik, buang nol
+            // depan, dibatasi maksimal 10% (batas PPJ menurut UU).
+            let v = e.target.value
+              .replace(/,/g, ".")
+              .replace(/[^\d.]/g, "")
+              .replace(/(\..*)\./g, "$1")
+              .replace(/^0+(?=\d)/, "");
+            if (Number(v) > 10) v = "10";
+            setField("ppj", v);
+          }}
+          hint="Persen dari biaya pemakaian (maks 10%, boleh desimal)"
         />
         <TextInput
-          label="Biaya Beban/Bulan"
+          label="Biaya Minimum/Bulan"
           type="text"
-          value={`Rp ${draft.bebanBulanan}`}
+          inputMode="numeric"
+          value={`Rp ${Number(draft.bebanBulanan || 0).toLocaleString("id-ID")}`}
           onChange={(e) =>
-            // Strip non-digit dari input supaya state tetap angka murni
             setField("bebanBulanan", e.target.value.replace(/[^\d]/g, ""))
           }
-          hint="Pelanggan pascabayar"
+          hint="Rekening minimum pascabayar (0 jika token)"
         />
         <TextInput
           label="Target Bulanan"
           type="text"
-          value={`Rp ${Number(draft.targetBulanan).toLocaleString("id-ID")}`}
+          inputMode="numeric"
+          value={`Rp ${Number(draft.targetBulanan || 0).toLocaleString("id-ID")}`}
           onChange={(e) =>
             setField("targetBulanan", e.target.value.replace(/[^\d]/g, ""))
           }
-          hint="Notifikasi jika melebihi"
+          hint="Notifikasi jika biaya melebihi angka ini"
         />
       </div>
     </Card>

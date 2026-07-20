@@ -30,7 +30,7 @@ const EVENTS: {
   {
     key:   "notifyMonthlyTarget",
     label: "Target konsumsi bulanan tercapai",
-    desc:  "Peringatan saat pemakaian mendekati atau melampaui target yang ditetapkan",
+    desc:  "Peringatan saat estimasi biaya bulanan melebihi target (Rp) yang ditetapkan",
   },
 ];
 

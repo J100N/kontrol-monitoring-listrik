@@ -1,8 +1,9 @@
 /* =============================================================================
  * AutomationSection - threshold sensor untuk mode AUTO
  *
- * Berisi 3 input numerik: PIR timeout global, threshold standby, over-current.
- * Semua nilai disimpan di settingsStore (disimpan via tombol global di bawah).
+ * Berisi 2 input numerik: PIR timeout global & threshold standby (keduanya
+ * dikirim ke perangkat). Semua nilai disimpan di settingsStore (via tombol
+ * global "Simpan perubahan" di bawah).
  * ========================================================================== */
 
 import { Card } from "../../components/ui/Card";
@@ -26,25 +27,31 @@ export function AutomationSection() {
     >
       <div className="vg-mqtt__grid">
         <TextInput
-          label="PIR Timeout Global"
-          type="number"
-          value={draft.pirTimeout}
-          onChange={(e) => setField("pirTimeout", e.target.value)}
-          hint="Detik tanpa gerakan → OFF"
+          label="PIR Timeout (detik)"
+          type="text"
+          inputMode="numeric"
+          value={`${Number(draft.pirTimeout) || 0}`}
+          onChange={(e) =>
+            setField("pirTimeout", e.target.value.replace(/[^\d]/g, ""))
+          }
+          hint="Lama tanpa gerakan sebelum relay OFF (detik)"
         />
         <TextInput
-          label="Threshold Standby"
-          type="number"
-          value={draft.standbyThreshold}
-          onChange={(e) => setField("standbyThreshold", e.target.value)}
-          hint="Watt minimum dianggap aktif"
-        />
-        <TextInput
-          label="Proteksi Over-Current"
-          type="number"
-          value={draft.overCurrent}
-          onChange={(e) => setField("overCurrent", e.target.value)}
-          hint="Auto-cutoff jika arus > A"
+          label="Threshold Standby (watt)"
+          type="text"
+          inputMode="decimal"
+          value={draft.standbyThreshold === "" ? "0" : draft.standbyThreshold}
+          onChange={(e) => {
+            // Boleh desimal (koma/titik), tanpa minus, maks 5000 W (batas firmware).
+            let v = e.target.value
+              .replace(/,/g, ".")
+              .replace(/[^\d.]/g, "")
+              .replace(/(\..*)\./g, "$1")
+              .replace(/^0+(?=\d)/, "");
+            if (Number(v) > 5000) v = "5000";
+            setField("standbyThreshold", v);
+          }}
+          hint="Daya di bawah nilai ini dianggap standby (watt)"
         />
       </div>
     </Card>

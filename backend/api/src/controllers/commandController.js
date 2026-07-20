@@ -1,27 +1,25 @@
-/* =============================================================================
- * commandController.js — Handler HTTP untuk pengiriman perintah relay
- *
- * Menerima perintah dari dashboard (RELAY_ON / RELAY_OFF) dan
- * mendelegasikan ke commandService yang akan menerbitkan pesan MQTT
- * terenkripsi ASCON ke firmware ESP32.
- *
- * Respons HTTP 202 Accepted digunakan karena perintah dikirim secara
- * asinkron — konfirmasi dari firmware datang via ACK MQTT terpisah.
- * ========================================================================== */
+/* 
+ commandController.js — Handler HTTP untuk pengiriman perintah relay
+ Menerima perintah dari dashboard (RELAY_ON / RELAY_OFF) dan
+ mendelegasikan ke commandService yang akan menerbitkan pesan MQTT
+ terenkripsi ASCON ke firmware ESP32.
+
+ Respons HTTP 202 Accepted digunakan karena perintah dikirim secara
+ asinkron — konfirmasi dari firmware datang via ACK MQTT terpisah.
+ */
 
 /**
- * createCommandController — buat controller dengan injeksi layanan perintah.
- * @param {object} deps
- * @param {object} deps.commandService - Layanan yang menerbitkan command MQTT
+ @param {object} deps
+ @param {object} deps.commandService - Layanan yang menerbitkan command MQTT
  */
 function createCommandController({ commandService }) {
 
   /**
-   * POST /api/devices/:deviceId/control
-   * Kirim perintah relay ke ESP32 via MQTT.
-   *
-   * Body: { command: "RELAY_ON"|"RELAY_OFF", command_id?, issued_by? }
-   * Respons: 202 Accepted + { ok, command_id, queued_at }
+   POST /api/devices/:deviceId/control
+   Kirim perintah relay ke ESP32 via MQTT.
+  
+   Body: { command: "RELAY_ON"|"RELAY_OFF", command_id?, issued_by? }
+   Respons: 202 Accepted + { ok, command_id, queued_at }
    */
   async function sendControl(req, res, next) {
     try {
@@ -56,9 +54,9 @@ function createCommandController({ commandService }) {
   }
 
   /**
-   * POST /api/devices/:deviceId/config
-   * Kirim parameter kontrol otomatis ke ESP32 (timeout PIR + threshold daya).
-   * Body: { pir_timeout_sec, power_threshold_w }
+   POST /api/devices/:deviceId/config
+   Kirim parameter kontrol otomatis ke ESP32 (timeout PIR + threshold daya).
+   Body: { pir_timeout_sec, power_threshold_w }
    */
   async function setConfig(req, res, next) {
     try {
@@ -73,7 +71,24 @@ function createCommandController({ commandService }) {
     }
   }
 
-  return { sendControl, setMode, setConfig };
+  /**
+   POST /api/devices/:deviceId/energy/reset
+   Reset akumulator energi (kWh) pada PZEM perangkat kembali ke 0.
+   Tanpa body. Respons: 202 Accepted + { ok, command_id }.
+   */
+  async function resetEnergy(req, res, next) {
+    try {
+      const result = await commandService.sendResetEnergy({
+        deviceId: req.params.deviceId,
+        issuedBy: req.body?.issued_by,
+      });
+      res.status(202).json({ ok: true, ...result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  return { sendControl, setMode, setConfig, resetEnergy };
 }
 
 module.exports = { createCommandController };

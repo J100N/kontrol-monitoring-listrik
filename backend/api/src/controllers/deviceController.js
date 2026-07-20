@@ -1,15 +1,13 @@
-/* =============================================================================
- * deviceController.js — Handler HTTP untuk resource "devices"
- *
- * Setiap fungsi menerima (req, res, next) dari Express dan mendelegasikan
- * logika bisnis ke deviceService. Error diteruskan ke global error handler
- * via next(error) agar format respons error tetap konsisten.
- * ========================================================================== */
+/*  deviceController.js — Handler HTTP untuk resource "devices"
+ 
+ Setiap fungsi menerima (req, res, next) dari Express dan mendelegasikan
+ logika bisnis ke deviceService. Error diteruskan ke global error handler
+ via next(error) agar format respons error tetap konsisten.
+ */
 
 /**
- * createDeviceController — buat controller dengan injeksi layanan device.
- * @param {object} deps
- * @param {object} deps.deviceService - Layanan yang mengelola registry device
+  @param {object} deps
+  @param {object} deps.deviceService - Layanan yang mengelola registry device
  */
 function createDeviceController({ deviceService }) {
 

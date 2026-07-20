@@ -1,15 +1,10 @@
-/* =============================================================================
- * authController.js — Menangani login dan penerbitan token JWT
- *
- * Alur autentikasi:
- *   1. Terima username + password dari body request
- *   2. Bandingkan username dengan ADMIN_USERNAME di .env
- *   3. Bandingkan password dengan hash bcrypt (dihitung sekali saat startup)
- *   4. Jika cocok → terbitkan JWT yang berlaku sesuai JWT_EXPIRES_IN
- *   5. Jika tidak cocok → kembalikan 401 Unauthorized
- *
- * Endpoint: POST /api/auth/login
- * ========================================================================== */
+/*  Alur autentikasi:
+ 1. Terima username + password dari body request
+ 2. Bandingkan username dengan ADMIN_USERNAME di .env
+ 3. Bandingkan password dengan hash bcrypt (dihitung sekali saat startup)
+ 4. Jika cocok → terbitkan JWT yang berlaku sesuai JWT_EXPIRES_IN
+ 5. Jika tidak cocok → kembalikan 401 Unauthorized
+ Endpoint: POST /api/auth/login*/
 
 const bcrypt = require("bcryptjs");  // Library hashing password
 const jwt    = require("jsonwebtoken"); // Library pembuatan dan verifikasi token
@@ -25,10 +20,8 @@ function createAuthController({ authConfig }) {
   // Dilakukan sekali saat server start, bukan tiap request masuk.
   const adminPasswordHash = bcrypt.hashSync(authConfig.adminPassword, 10);
 
-  /**
-   * login — handler untuk POST /api/auth/login
-   * Memvalidasi kredensial lalu mengembalikan JWT jika valid.
-   */
+  /*   login — handler untuk POST /api/auth/login
+   Memvalidasi kredensial lalu mengembalikan JWT jika valid.*/
   async function login(req, res, next) {
     try {
       const { username, password } = req.body;

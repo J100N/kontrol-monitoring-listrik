@@ -71,7 +71,26 @@ function createCommandService({ registryRepo, mqttPublisher }) {
     };
   }
 
-  return { sendControl, sendMode, sendConfig };
+  // Reset akumulator energi (kWh) pada PZEM perangkat kembali ke 0.
+  // Firmware menangani command "reset_energy" (worker me-lowercase-kan otomatis).
+  async function sendResetEnergy({ deviceId, issuedBy }) {
+    const device = registryRepo.get(deviceId);
+    if (!device) {
+      const err = new Error(`device ${deviceId} tidak ditemukan`);
+      err.statusCode = 404;
+      throw err;
+    }
+    const commandId = `rst-${Date.now()}`;
+    await mqttPublisher.publishDashboardCommand({
+      deviceId,
+      command: "RESET_ENERGY",
+      commandId,
+      issuedBy: issuedBy || "dashboard",
+    });
+    return { device_id: deviceId, command_id: commandId, command: "RESET_ENERGY" };
+  }
+
+  return { sendControl, sendMode, sendConfig, sendResetEnergy };
 }
 
 module.exports = { createCommandService };

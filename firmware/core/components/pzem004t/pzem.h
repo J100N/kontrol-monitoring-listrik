@@ -48,6 +48,10 @@ esp_err_t pzem_deinit(void);
 // Membaca 1 paket lengkap parameter listrik dari PZEM.
 esp_err_t pzem_read_data(pzem_data_t *out_data);
 
+// Reset akumulator energi (energy_wh) PZEM kembali ke 0 (perintah Modbus 0x42).
+// Hanya berhasil bila PZEM bertenaga (relay ON); bila tidak, akan timeout.
+esp_err_t pzem_reset_energy(void);
+
 // Memeriksa apakah driver PZEM sudah aktif.
 bool pzem_is_initialized(void);
 

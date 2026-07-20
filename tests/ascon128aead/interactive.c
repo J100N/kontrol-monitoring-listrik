@@ -1,31 +1,4 @@
-/* ============================================================================
- * interactive.c
- * Penguji interaktif algoritma Ascon-AEAD128 (NIST SP 800-232, final
- * 13 Agustus 2025) dengan input manual via terminal.
- *
- * STRUKTUR FILE:
- *   [BAGIAN A]  Implementasi algoritma Ascon-AEAD128.
- *               -> IDENTIK dengan kode firmware pada
- *                  firmware/core/components/ascon_crypto/ascon.c
- *               (nama makro, nama fungsi, urutan, dan logika sengaja dijaga
- *                sama persis agar mudah dibandingkan secara visual).
- *
- *   [BAGIAN B]  Test harness interaktif (parsing input hex/text, prompt CLI,
- *               pretty-print hasil, mode demo).
- *               -> Kode khusus untuk pengujian via terminal, TIDAK ada pada
- *                  firmware.
- *
- * Kebenaran dan ekuivalensi Bagian A terhadap ascon.c dapat dibuktikan dengan
- * membandingkan output program ini terhadap berkas LWC_AEAD_KAT_128_128.txt
- * (1089 Known Answer Test vector resmi NIST SP 800-232) yang ada di folder
- * yang sama.
- *
- * Tidak ada library kriptografi eksternal — seluruh permutasi, S-box,
- * linear diffusion, padding, dan finalisasi ditulis langsung mengikuti
- * spesifikasi resmi NIST SP 800-232.
- *
- * -----------------------------------------------------------------------------
- * BUILD (gcc / clang, standar C11):
+/*  * BUILD (gcc / clang, standar C11):
  *     gcc -std=c11 -O2 -Wall interactive.c -o interactive
  *
  * JALANKAN:
@@ -37,11 +10,6 @@
  *     Nonce : 32 karakter hex (16 byte / 128 bit)  WAJIB
  *     PT    : hex (bebas panjang) ATAU diawali "text:" untuk teks ASCII
  *     AD    : hex (bebas panjang) ATAU diawali "text:" untuk teks ASCII
- *
- * Tekan Enter pada Key/Nonce untuk memakai default NIST KAT
- *     (Key = 000102...0F, Nonce = 1011...1F).
- * Tekan Enter pada PT/AD untuk meninggalkan kosong.
- * ============================================================================
  */
 
 #include <ctype.h>
@@ -52,20 +20,7 @@
 #include <string.h>
 
 
-/* ###########################################################################
- * #                                                                         #
- * #                              BAGIAN A                                   #
- * #         IMPLEMENTASI ALGORITMA ASCON-AEAD128 (NIST SP 800-232)          #
- * #                                                                         #
- * #   Kode di bawah ini IDENTIK dengan implementasi firmware pada:          #
- * #     firmware/core/components/ascon_crypto/ascon.c                       #
- * #                                                                         #
- * #   Setiap perubahan pada bagian ini WAJIB disinkronkan dengan ascon.c    #
- * #   agar firmware dan tester ini tetap menghasilkan ciphertext + tag      #
- * #   identik bit demi bit (diverifikasi via KAT NIST resmi).               #
- * #                                                                         #
- * ###########################################################################
- */
+/*IMPLEMENTASI ALGORITMA ASCON-AEAD128 (NIST SP 800-232)*/
 
 /* --- Parameter Ascon-AEAD128 sesuai NIST SP 800-232 §3.2 --- */
 #define ASCON_KEY_SIZE     16

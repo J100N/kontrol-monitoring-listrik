@@ -32,8 +32,11 @@ typedef struct {
 	size_t ciphertext_len;
 } telemetry_encrypted_command_t;
 
-// Jumlah sampel per batch sebelum dikirim ke server (1 sampel/detik → kirim tiap 10 detik).
-#define TELEMETRY_BATCH_SIZE 10U
+// Jumlah sampel per batch sebelum dikirim ke server.
+// = 1 → kirim TIAP 1 DETIK (dashboard update tiap detik, lebih real-time).
+// Buffer offline tetap 180 sampel (~3 menit) — lihat TELEMETRY_BUFFER_CAPACITY
+// di app_main.c; data tidak hilang saat WiFi putus < ~3 menit (flush saat reconnect).
+#define TELEMETRY_BATCH_SIZE 1U
 
 // Bentuk payload telemetry plaintext JSON satu sampel (fallback/debug).
 esp_err_t telemetry_build_power_json(

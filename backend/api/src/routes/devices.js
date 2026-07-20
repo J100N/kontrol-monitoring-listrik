@@ -81,6 +81,10 @@ function createDeviceRoutes({
     commandController.sendControl,
   );
 
+  // POST /api/devices/:deviceId/energy/reset — Reset akumulator energi (kWh) PZEM ke 0
+  //   Tanpa body; controller menerbitkan command "reset_energy" terenkripsi ke ESP32.
+  router.post("/:deviceId/energy/reset", commandController.resetEnergy);
+
   // ── Data telemetri dan event log ──────────────────────────────────────────
 
   // GET /api/devices/:deviceId/telemetry/latest  — Nilai sensor terbaru dari InfluxDB

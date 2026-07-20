@@ -74,10 +74,15 @@ export function SettingsPage() {
     }
 
     // Kirim parameter kontrol otomatis ke ESP32 (timeout PIR + threshold daya).
-    // Tarif, MQTT broker, & notifikasi hanya tersimpan di dashboard.
+    // Clamp ke rentang yang divalidasi API (pir 5–7200 dtk, thr 0–5000 W) — sama
+    // seperti DeviceDetailPage.handleSaveConfig. Tanpa clamp, nilai di luar batas
+    // (mis. PIR 3 dtk) ditolak API dengan HTTP 400, lalu save-bar salah menuduh
+    // "perangkat tidak merespons" padahal itu error validasi, bukan koneksi.
+    const safePir = Math.min(7200, Math.max(5, Math.round(Number(draft.pirTimeout)) || 5));
+    const safeThreshold = Math.min(5000, Math.max(0, Number(draft.standbyThreshold) || 0));
     const deviceOk = await sendConfig(DEVICE_ID, {
-      pir_timeout_sec:   Math.round(Number(draft.pirTimeout)) || 600,
-      power_threshold_w: Number(draft.standbyThreshold) || 0,
+      pir_timeout_sec:   safePir,
+      power_threshold_w: safeThreshold,
     });
 
     // Persist seluruh pengaturan ke localStorage.

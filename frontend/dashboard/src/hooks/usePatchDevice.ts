@@ -122,5 +122,30 @@ export function usePatchDevice() {
     [updateDevice],
   );
 
-  return { patchDevice, setMode, sendConfig, loading, error };
+  /**
+   * resetEnergy — reset akumulator energi (kWh) PZEM perangkat kembali ke 0.
+   *   POST /api/devices/:id/energy/reset  (tanpa body)
+   * Backend meneruskan command reset_energy terenkripsi ke firmware ESP32.
+   * Catatan: hanya berhasil bila relay ON (PZEM bertenaga).
+   *
+   * @returns true jika perintah berhasil dikirim (HTTP 202)
+   */
+  const resetEnergy = useCallback(
+    async (deviceId: string): Promise<boolean> => {
+      setLoading(true);
+      setError(null);
+      try {
+        await api.post(`/api/devices/${deviceId}/energy/reset`);
+        return true;
+      } catch (err) {
+        setError((err as Error).message ?? "Gagal mengirim perintah reset energi");
+        return false;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
+
+  return { patchDevice, setMode, sendConfig, resetEnergy, loading, error };
 }

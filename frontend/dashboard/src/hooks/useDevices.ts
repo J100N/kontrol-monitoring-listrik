@@ -26,7 +26,10 @@ export function useDevices() {
   const [loading, setLoading]   = useState(true);
   const [error,   setError]     = useState<string | null>(null);
 
-  // Ambil aksi dari store — tidak trigger re-render saat store berubah
+  // Tanpa selector = berlangganan SELURUH store, jadi pemanggil hook ini ikut
+  // re-render tiap kali store berubah (mis. tiap telemetri masuk). Disengaja:
+  // hook ini memang mengembalikan `devices`. Pemakai yang hanya butuh sebagian
+  // sebaiknya subscribe langsung dgn selector, mis. useDeviceStore((s) => s.devices).
   const { devices, setDevices, updateDevice } = useDeviceStore();
 
   // Guard agar tidak fetch dua kali di React StrictMode (double-invoke useEffect)
@@ -82,8 +85,14 @@ export function useDevices() {
         if (power_w   != null) patch.power   = power_w;
         if (voltage_v != null) patch.voltage = voltage_v;
         if (current_a != null) patch.current = current_a;
-        // Konversi Wh → kWh dengan pembulatan 2 desimal
-        if (energy_wh != null) patch.energy  = +(energy_wh / 1000).toFixed(2);
+        // Konversi Wh → kWh, 3 desimal (resolusi PZEM 1 Wh); konsisten dgn adapter
+        if (energy_wh != null) patch.energy  = +(energy_wh / 1000).toFixed(3);
+        // Menerima telemetri = perangkat pasti hidup → tandai online segera, sama
+        // seperti useDevice.ts. Tanpa ini status tertinggal "offline" sampai refetch
+        // 10 dtk berikutnya: badge jadi bertentangan (kartu OFFLINE tapi daya live
+        // berubah), dan useNotifications mengira perangkat masih mati lalu memunculkan
+        // toast offline baru setiap pesan telemetri masuk.
+        patch.status = "online";
         patch.lastUpdateText = "Baru saja diperbarui";
         updateDevice(device_id, patch);
 

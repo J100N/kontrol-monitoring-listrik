@@ -33,6 +33,7 @@ static uint32_t s_ack_seq    = 0;
 static ascon_ctx_t s_ascon   = {0};
 static char s_mqtt_client_id[40] = {0};  // client_id MQTT unik per perangkat (diisi saat boot)
 static float s_last_energy_wh = 0.0f;    // energi kumulatif terakhir (dipertahankan saat relay OFF)
+static bool s_prev_relay_on = false;     // keadaan relay siklus sebelumnya (deteksi transisi ON→OFF)
 static uint8_t s_batch_count = 0;
 
 static void wifi_event_callback(wifi_manager_event_t event, void *event_data, void *user_ctx);
@@ -42,8 +43,7 @@ static void mqtt_command_callback(const char *topic, const uint8_t *payload, siz
  * COUNTER ANTI-REPLAY PERMANEN (DISIMPAN DI NVS)
  * Counter ASCON harus selalu naik walau device reboot, supaya server
  * tidak menganggap data sebagai serangan replay. Kita simpan "batas atas"
- * counter di flash (NVS): tiap boot lompat +RESERVE, dan disimpan ulang
- * tiap kali counter mendekati batas. Hemat tulis flash (sekali per ~RESERVE).
+ * counter di flash (NVS)
  * ============================================================= */
 
 #define ASCON_CTR_NVS_NS  "ascon"     // namespace NVS
@@ -85,12 +85,52 @@ static void ascon_ctr_nvs_maybe_save(uint64_t current)
 }
 
 /* =============================================================
+ * COUNTER ANTI-REPLAY PERINTAH MASUK (RX) — DISIMPAN DI NVS
+ *
+ * Envelope perintah dari server membawa `counter` yang selalu menaik. Tanpa
+ * membandingkannya dengan yang terakhir diterima, envelope perintah yang
+ * DITANGKAP lalu DIKIRIM ULANG penyerang tetap lolos: tag ASCON-nya sah, jadi
+ * dekripsi berhasil dan relay BENAR-BENAR dieksekusi. Tag yang sah hanya
+ * membuktikan keaslian & keutuhan, BUKAN kesegaran — perbandingan counter
+ * inilah yang menolak pesan lama. Nilainya disimpan di NVS supaya reboot tidak
+ * membuka kembali celah replay.
+ *
+ * Beda dengan tx_ctr di atas yang memakai blok cadangan (RESERVE): untuk arah
+ * MASUK nilai harus disimpan APA ADANYA. Mencadangkan ke depan justru akan
+ * menolak perintah SAH berikutnya yang counter-nya jatuh di dalam blok itu.
+ * Perintah bersifat jarang (dipicu pengguna), jadi satu tulis NVS per perintah
+ * yang diterima masih sangat jauh di bawah batas keausan flash.
+ * ============================================================= */
+
+#define CMD_CTR_NVS_KEY "rx_cmd_ctr"  // key: counter perintah sah terakhir
+
+static uint64_t s_last_cmd_ctr = 0;   // counter perintah sah terakhir (0 = belum ada)
+
+static void cmd_ctr_nvs_load(void)
+{
+    nvs_handle_t h;
+    if (nvs_open(ASCON_CTR_NVS_NS, NVS_READONLY, &h) == ESP_OK) {
+        nvs_get_u64(h, CMD_CTR_NVS_KEY, &s_last_cmd_ctr); // tetap 0 bila belum pernah ada
+        nvs_close(h);
+    }
+}
+
+static void cmd_ctr_nvs_save(uint64_t ctr)
+{
+    nvs_handle_t h;
+    if (nvs_open(ASCON_CTR_NVS_NS, NVS_READWRITE, &h) == ESP_OK) {
+        nvs_set_u64(h, CMD_CTR_NVS_KEY, ctr);
+        nvs_commit(h);
+        nvs_close(h);
+    }
+}
+
+/* =============================================================
  * PERSISTENSI KONFIG AUTO-CONTROL (NVS)
  *
  * Parameter kontrol otomatis (timeout PIR & threshold daya) bisa
  * diubah dari dashboard via command "config_update". Nilainya disimpan
- * di NVS agar tetap berlaku setelah device reboot. Threshold disimpan
- * sebagai centi-watt (watt*100) supaya muat di nvs_set_u32.
+ * di NVS agar tetap berlaku setelah device reboot.
  * ============================================================= */
 
 #define AUTOCFG_NVS_NS    "autocfg"   // namespace NVS untuk konfig auto-control
@@ -98,6 +138,7 @@ static void ascon_ctr_nvs_maybe_save(uint64_t current)
 #define AUTOCFG_KEY_THR   "thr_cw"    // threshold daya (centi-watt = watt*100)
 #define AUTOCFG_KEY_MODE  "mode"      // mode kerja (0=manual, 1=automatic)
 #define AUTOCFG_KEY_RELAY "relay_on"  // status relay terakhir (0=off, 1=on)
+#define AUTOCFG_KEY_ENERGY "e_wh"     // energi kumulatif terakhir (Wh, bulat)
 
 // Baca konfig dari NVS bila ada; bila tidak, *_io tidak diubah (pakai default).
 static void autocfg_nvs_load(uint32_t *pir_sec_io, float *thr_w_io)
@@ -168,6 +209,58 @@ static void autocfg_nvs_save_relay(bool on)
     nvs_handle_t h;
     if (nvs_open(AUTOCFG_NVS_NS, NVS_READWRITE, &h) == ESP_OK) {
         nvs_set_u8(h, AUTOCFG_KEY_RELAY, on ? 1U : 0U);
+        nvs_commit(h);
+        nvs_close(h);
+    }
+}
+
+/* -------------------------------------------------------------------------
+ * ENERGI KUMULATIF TERAKHIR (NVS)
+ *
+ * PZEM terpasang di sisi beban, jadi saat relay OFF ia ikut mati dan tidak bisa
+ * dibaca. Pada kondisi itu telemetri heartbeat memakai s_last_energy_wh. Nilai itu
+ * diinisialisasi 0, sehingga SETELAH REBOOT DENGAN RELAY OFF perangkat melaporkan
+ * energi 0 padahal akumulator PZEM sebenarnya besar — dashboard menampilkan kWh
+ * anjlok ke 0, dan baseline target bulanan ikut rusak.
+ *
+ * Nilainya disimpan sebagai u32 Wh BULAT: resolusi PZEM memang 1 Wh (maks ~9.999.990
+ * Wh) sehingga muat di u32 tanpa kehilangan presisi sama sekali.
+ *
+ * KEAUSAN FLASH: penulisan HANYA dilakukan saat relay beralih ON→OFF (lihat loop
+ * utama), bukan tiap sampel. Alasannya, energi berhenti bertambah begitu relay OFF —
+ * nilai pada detik itulah yang perlu bertahan. Menulis tiap detik akan menghabiskan
+ * umur NVS dalam hitungan hari.
+ * ------------------------------------------------------------------------- */
+
+// Baca energi kumulatif terakhir dari NVS. Bila belum pernah tersimpan, *wh_io tidak
+// diubah (pakai default pemanggil).
+static void autocfg_nvs_load_energy(float *wh_io)
+{
+    nvs_handle_t h;
+    if (nvs_open(AUTOCFG_NVS_NS, NVS_READONLY, &h) != ESP_OK) {
+        return;
+    }
+    uint32_t wh = 0;
+    if (nvs_get_u32(h, AUTOCFG_KEY_ENERGY, &wh) == ESP_OK) {
+        *wh_io = (float)wh;
+    }
+    nvs_close(h);
+}
+
+// Simpan energi kumulatif terakhir ke NVS. Nilai di luar jangkauan fisik PZEM diabaikan:
+// glitch UART pernah menghasilkan angka raksasa, dan bila ikut tersimpan ia akan BERTAHAN
+// di NVS lalu dilaporkan lagi pada setiap boot berikutnya. Batas ini sekaligus menjaga
+// konversi ke uint32 tetap terdefinisi (float di luar jangkauan uint32 = undefined behavior).
+static void autocfg_nvs_save_energy(float wh)
+{
+    // (wh >= 0.0f) menangkap negatif SEKALIGUS NaN — perbandingan apa pun dgn NaN false.
+    // Batas atas mengikuti akumulator maksimum PZEM-004T (~9.999.990 Wh).
+    if (!(wh >= 0.0f) || wh > 10000000.0f) {
+        return;
+    }
+    nvs_handle_t h;
+    if (nvs_open(AUTOCFG_NVS_NS, NVS_READWRITE, &h) == ESP_OK) {
+        nvs_set_u32(h, AUTOCFG_KEY_ENERGY, (uint32_t)wh);
         nvs_commit(h);
         nvs_close(h);
     }
@@ -463,6 +556,24 @@ static void mqtt_command_callback(const char *topic, const uint8_t *payload, siz
         return;
     }
 
+    // ANTI-REPLAY: counter WAJIB lebih besar dari perintah sah terakhir. Tag ASCON
+    // yang valid hanya membuktikan keaslian & keutuhan pesan — BUKAN kesegarannya.
+    // Envelope lama yang direkam penyerang tetap ber-tag sah sehingga lolos dekripsi;
+    // perbandingan counter inilah satu-satunya yang menolaknya. Tanpa ini, replay
+    // "relay_on" yang ditangkap di jaringan benar-benar menyalakan relay.
+    if (counter <= s_last_cmd_ctr) {
+        ESP_LOGW(
+            TAG,
+            "[%s] Command REPLAY ditolak (counter=%llu <= terakhir=%llu)",
+            DEVICE_ID,
+            (unsigned long long)counter,
+            (unsigned long long)s_last_cmd_ctr);
+        mqtt_app_publish_ack(enc_cmd.command_id, "error", "replay command ditolak", -1, false);
+        return;
+    }
+    s_last_cmd_ctr = counter;
+    cmd_ctr_nvs_save(counter);
+
     strncpy(command_id, enc_cmd.command_id, sizeof(command_id) - 1U);
     ESP_LOGI(
         TAG,
@@ -623,6 +734,12 @@ void app_main(void)
     ESP_ERROR_CHECK(ascon_set_tx_counter(&s_ascon, ctr_start));
     ESP_LOGI(TAG, "[%s] Counter ASCON dilanjutkan dari NVS: %llu", DEVICE_ID, (unsigned long long)ctr_start);
 
+    // Pulihkan counter perintah MASUK terakhir. Tanpa ini, tiap reboot mengembalikan
+    // ambang ke 0 sehingga seluruh perintah lama yang direkam penyerang bisa
+    // di-replay lagi — celah anti-replay terbuka kembali setiap kali device restart.
+    cmd_ctr_nvs_load();
+    ESP_LOGI(TAG, "[%s] Counter anti-replay perintah dari NVS: %llu", DEVICE_ID, (unsigned long long)s_last_cmd_ctr);
+
     ESP_ERROR_CHECK(device_state_init());
     ESP_ERROR_CHECK(device_state_set_device_online(true));
     // Pulihkan mode kerja terakhir dari NVS agar tetap sinkron dgn pilihan user
@@ -653,18 +770,8 @@ void app_main(void)
         }
     }
 
-    // Mitigasi brownout saat perangkat pertama dicolok ke listrik: beri jeda
-    // singkat agar rail 5V & regulator stabil (kapasitor bulk terisi) sebelum
-    // koil relay menarik arus inrush. Tanpa jeda ini, inrush relay saat boot
-    // dapat menjatuhkan tegangan → brownout reset → device reboot berulang
-    // (gejala relay klik on/off terus "seperti ngehang"). Catatan: bila catu
-    // daya memang kurang kuat, jeda ini hanya mengurangi, bukan menghilangkan.
     vTaskDelay(pdMS_TO_TICKS(1500));
 
-    // Pulihkan status relay terakhir dari NVS (Pilihan B): relay bangun sesuai
-    // keadaan sebelum listrik mati (ON tetap ON, OFF tetap OFF), bukan selalu ON.
-    // First-boot (belum ada NVS) default ON agar PZEM langsung mendapat arus.
-    // Bila status terakhir OFF, PZEM memang tidak membaca saat boot — itu wajar.
     bool boot_relay_on = true;
     autocfg_nvs_load_relay(&boot_relay_on);
     relay_config_t relay_cfg = {
@@ -676,6 +783,20 @@ void app_main(void)
     ESP_ERROR_CHECK(device_state_set_relay(relay_get_state()));
     ESP_LOGI(TAG, "[%s] Status relay saat boot dipulihkan: %s", DEVICE_ID,
              boot_relay_on ? "ON" : "OFF");
+
+    // Pulihkan energi kumulatif terakhir SEBELUM loop mulai mengirim telemetri. Wajib
+    // di sini: bila boot dengan relay OFF, PZEM tak bertenaga sehingga heartbeat memakai
+    // s_last_energy_wh — tanpa pemulihan ini nilainya 0 dan dashboard melaporkan energi
+    // anjlok ke 0. Saat relay ON, nilai ini akan langsung ditimpa pembacaan PZEM asli.
+    autocfg_nvs_load_energy(&s_last_energy_wh);
+    ESP_LOGI(TAG, "[%s] Energi kumulatif dipulihkan dari NVS: %.0f Wh", DEVICE_ID,
+             s_last_energy_wh);
+
+    // Titik acuan deteksi transisi relay ON→OFF di loop utama. Diisi dari keadaan boot
+    // supaya boot dengan relay OFF tidak dianggap "baru saja beralih" dan menimpa energi
+    // tersimpan dengan nilai yang belum tentu valid.
+    s_prev_relay_on = relay_get_state();
+
     refresh_oled_from_state();
 
     // Inisialisasi PIR untuk deteksi gerakan penghuni.
@@ -710,6 +831,8 @@ void app_main(void)
     // PZEM sudah dicoba init sejak awal boot, retry tetap dilakukan di loop utama.
 
     // Loop baca telemetry PZEM periodik (siap diteruskan ke MQTT/InfluxDB).
+    // Titik acuan periode untuk vTaskDelayUntil — alasannya di akhir loop.
+    TickType_t last_wake = xTaskGetTickCount();
     while (true) {
         // Fallback re-sync waktu: jika belum sinkron, picu ulang SNTP berkala
         // (~tiap 20 detik). Begitu sinkron, catat sekali lalu berhenti memaksa.
@@ -741,6 +864,11 @@ void app_main(void)
             if (pzem_ret != ESP_OK) {
                 ESP_LOGW(TAG, "[%s] Retry init PZEM gagal: %s", DEVICE_ID, esp_err_to_name(pzem_ret));
                 vTaskDelay(pdMS_TO_TICKS(5000));
+                // Jalur ini melewati vTaskDelayUntil di akhir loop, jadi segarkan titik
+                // acuan periode. Tanpa ini, saat PZEM pulih last_wake sudah basi (jauh
+                // di masa lalu) sehingga vTaskDelayUntil "mengejar" dengan menembak
+                // beberapa iterasi tanpa jeda → semburan telemetri.
+                last_wake = xTaskGetTickCount();
                 continue;
             }
         }
@@ -753,6 +881,19 @@ void app_main(void)
         bool relay_is_on = relay_get_state();
         bool pzem_ok = false;
         bool build_sample = false;  // apakah siklus ini menghasilkan sampel telemetri
+
+        // Transisi relay ON→OFF: energi berhenti bertambah mulai detik ini, jadi simpan
+        // nilai terakhir ke NVS supaya boot berikutnya (yang mungkin dimulai dgn relay
+        // OFF, sehingga PZEM tak bisa dibaca) tetap melaporkan energi yang benar.
+        // Dicek di SINI — satu tempat di loop utama — supaya SEMUA jalur yang mematikan
+        // relay ikut tertangkap: perintah manual, auto-control, maupun yang lain. Menulis
+        // hanya saat transisi menjaga umur flash NVS (bandingkan: tiap detik = boros).
+        if (s_prev_relay_on && !relay_is_on) {
+            autocfg_nvs_save_energy(s_last_energy_wh);
+            ESP_LOGI(TAG, "[%s] Relay OFF — energi %.0f Wh disimpan ke NVS", DEVICE_ID,
+                     s_last_energy_wh);
+        }
+        s_prev_relay_on = relay_is_on;
 
         if (relay_is_on) {
             pzem_ret = pzem_read_data(&data);
@@ -904,6 +1045,22 @@ void app_main(void)
 
         refresh_oled_from_state();
 
-        vTaskDelay(pzem_interval_ticks);
+        // Bangun pada PERIODE tetap 1000 ms, bukan menunggu 1000 ms SETELAH kerja
+        // selesai. Dengan vTaskDelay biasa, durasi badan loop (baca PZEM + enkripsi
+        // ASCON + publish MQTT + refresh OLED) ikut menambah periode. Terukur di
+        // produksi: jarak antar-sampel konsisten ~1170 ms → hanya ~0,855 sampel/detik
+        // (3062 titik/jam dari target 3600), meleset 15% dari spesifikasi 1 Hz.
+        //
+        // PENTING — reset acuan bila tenggat terlewat. xTaskDelayUntil mengembalikan
+        // pdFALSE saat loop sempat tertahan lebih lama dari periode (mis. WiFi/MQTT
+        // putus lalu publish memblokir puluhan detik). Pada kasus itu acuan waktu
+        // tertinggal di masa lalu, dan bila dibiarkan setiap iterasi berikutnya lolos
+        // TANPA jeda sama sekali untuk "mengejar" ketertinggalan — terukur di produksi
+        // sebagai burst sampel berjarak ~97 ms setelah jeda 47 detik, bukan 1 Hz.
+        // Menyetel ulang acuan ke waktu sekarang membuat laju langsung kembali 1 Hz
+        // tanpa mengejar; sampel yang telanjur terlewat memang tidak perlu disusulkan.
+        if (xTaskDelayUntil(&last_wake, pzem_interval_ticks) == pdFALSE) {
+            last_wake = xTaskGetTickCount();
+        }
     }
 }

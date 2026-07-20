@@ -60,7 +60,13 @@ esp_err_t time_sync_wait_for_sync(uint32_t timeout_ms)
 
 esp_err_t time_sync_force_resync(void)
 {
-    ESP_RETURN_ON_FALSE(s_initialized, ESP_ERR_INVALID_STATE, TAG, "time_sync belum init");
+    if (!s_initialized) {
+        // Race jinak saat boot: WiFi bisa mendapat IP (callback memicu resync)
+        // sebelum time_sync_init() sempat dipanggil. Bukan error — SNTP tetap
+        // dimulai oleh time_sync_init() sesaat kemudian. Cukup DEBUG.
+        ESP_LOGD(TAG, "force resync dilewati: time_sync belum init");
+        return ESP_ERR_INVALID_STATE;
+    }
 
     // Sudah sinkron: tidak perlu memaksa query ulang.
     if (time_sync_is_synced()) {
@@ -87,7 +93,14 @@ esp_err_t time_sync_get_epoch_ms(int64_t *out_epoch_ms)
     ESP_RETURN_ON_FALSE(gettimeofday(&tv, NULL) == 0, ESP_FAIL, TAG, "gettimeofday gagal");
 
     time_t epoch_sec = tv.tv_sec;
-    ESP_RETURN_ON_FALSE(time_sync_epoch_is_valid(epoch_sec), ESP_ERR_INVALID_STATE, TAG, "waktu belum sync");
+    if (!time_sync_epoch_is_valid(epoch_sec)) {
+        // Kondisi NORMAL sebelum SNTP selesai sinkron (mis. WiFi belum terhubung).
+        // Pemanggil (app_main) sudah menyediakan fallback ke uptime, jadi JANGAN
+        // cetak ERROR tiap sampel (±1 detik) — itu membanjiri serial monitor dan
+        // menyamarkan error asli. Cukup level DEBUG.
+        ESP_LOGD(TAG, "waktu belum sync, pemanggil memakai fallback uptime");
+        return ESP_ERR_INVALID_STATE;
+    }
 
     *out_epoch_ms = ((int64_t)tv.tv_sec * 1000LL) + ((int64_t)tv.tv_usec / 1000LL);
     return ESP_OK;

@@ -17,6 +17,7 @@
  */
 
 #define PZEM_FN_READ_INPUT_REG 0x04
+#define PZEM_FN_RESET_ENERGY 0x42
 #define PZEM_REG_START_ADDR 0x0000
 #define PZEM_REG_COUNT 0x000A
 
@@ -269,6 +270,48 @@ esp_err_t pzem_read_data(pzem_data_t *out_data)
 	out_data->power_factor = (float)pf_raw / 100.0f;
 	out_data->alarm_status = alarm_raw;
 
+	return ESP_OK;
+}
+
+esp_err_t pzem_reset_energy(void)
+{
+	ESP_RETURN_ON_FALSE(s_initialized, ESP_ERR_INVALID_STATE, TAG, "pzem belum diinisialisasi");
+
+	// Frame reset energi PZEM-004T v3: [addr][0x42][crc_lo][crc_hi] (4 byte).
+	uint8_t req[4] = {0};
+	req[0] = s_cfg.slave_addr;
+	req[1] = PZEM_FN_RESET_ENERGY;
+	uint16_t crc = pzem_crc16_modbus(req, 2);
+	req[2] = (uint8_t)(crc & 0xFF);
+	req[3] = (uint8_t)(crc >> 8);
+
+	// Bersihkan buffer RX agar balasan tidak tercampur data lama.
+	ESP_RETURN_ON_ERROR(uart_flush_input(s_cfg.uart_num), TAG, "uart_flush_input gagal");
+
+	int written = uart_write_bytes(s_cfg.uart_num, req, sizeof(req));
+	ESP_RETURN_ON_FALSE(written == (int)sizeof(req), ESP_FAIL, TAG, "uart_write_bytes reset tidak lengkap");
+	ESP_RETURN_ON_ERROR(uart_wait_tx_done(s_cfg.uart_num, pdMS_TO_TICKS(100)), TAG, "uart_wait_tx_done timeout");
+
+	// Balasan sukses = echo 4 byte identik. (Balasan error PZEM = 5 byte, fc=0xC2.)
+	uint8_t resp[4] = {0};
+	ESP_RETURN_ON_ERROR(
+		pzem_uart_read_exact(s_cfg.uart_num, resp, sizeof(resp), s_cfg.response_timeout_ms),
+		TAG,
+		"timeout/gagal membaca balasan reset pzem");
+
+	if (resp[0] != s_cfg.slave_addr || resp[1] != PZEM_FN_RESET_ENERGY) {
+		ESP_LOGE(TAG, "balasan reset tidak valid: 0x%02X 0x%02X", resp[0], resp[1]);
+		return ESP_ERR_INVALID_RESPONSE;
+	}
+
+	uint16_t crc_calc = pzem_crc16_modbus(resp, 2);
+	uint16_t crc_recv = (uint16_t)((uint16_t)resp[3] << 8) | resp[2];
+	if (crc_calc != crc_recv) {
+		ESP_LOGE(TAG, "crc balasan reset mismatch: expected=0x%04X got=0x%04X", crc_calc, crc_recv);
+		return ESP_ERR_INVALID_CRC;
+	}
+
+	ESP_LOGI(TAG, "energi PZEM berhasil di-reset ke 0");
 	return ESP_OK;
 }
 

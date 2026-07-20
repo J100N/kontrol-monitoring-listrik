@@ -171,10 +171,19 @@ esp_err_t mqtt_app_start(void)
 		return ESP_OK;
 	}
 
-	// Pastikan Wi-Fi terhubung dulu sebelum connect broker.
+	// Tunggu Wi-Fi sebentar (best-effort), TAPI JANGAN gagal permanen kalau WiFi
+	// telat konek. Dulu di sini pakai ESP_RETURN_ON_ERROR → mqtt_app_start gagal →
+	// task boot bunuh diri (vTaskDelete) → MQTT TIDAK PERNAH start lagi walau WiFi
+	// kemudian tersambung (gejala: "WiFi konek, MQTT tidak").
+	//
+	// Perbaikan: client MQTT TETAP di-start. esp-mqtt auto-reconnect (aktif) akan
+	// menyambung ke broker begitu WiFi/IP tersedia — tanpa menambah mekanisme
+	// reconnect baru (tidak tumpang tindih).
 	if (!wifi_manager_is_connected()) {
 		uint32_t timeout_ms = (s_cfg.wifi_wait_timeout_ms == 0U) ? 15000U : s_cfg.wifi_wait_timeout_ms;
-		ESP_RETURN_ON_ERROR(wifi_manager_wait_until_connected(timeout_ms), TAG, "Wi-Fi belum connected");
+		if (wifi_manager_wait_until_connected(timeout_ms) != ESP_OK) {
+			ESP_LOGW(TAG, "Wi-Fi belum siap; MQTT tetap di-start, auto-reconnect menyambung saat WiFi tersedia");
+		}
 	}
 
 	esp_mqtt_client_config_t mqtt_cfg = {

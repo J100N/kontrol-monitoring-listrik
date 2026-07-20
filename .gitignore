@@ -5,6 +5,7 @@ yarn-error.log
 
 # ── Frontend build ───────────────────────────────────────────────────────────
 frontend/dashboard/dist/
+*.tsbuildinfo
 
 # ── Environment / secrets ────────────────────────────────────────────────────
 # Jangan commit file .env yang berisi kredensial nyata.
@@ -32,7 +33,11 @@ do_sync.tgz
 Thumbs.db
 desktop.ini
 
-# ── Editor ───────────────────────────────────────────────────────────────────
+# ── Editor / tooling ─────────────────────────────────────────────────────────
 .vscode/settings.json
+.claude/
 *.swp
 *~
+
+# ── Compiled binaries ────────────────────────────────────────────────────────
+*.exe

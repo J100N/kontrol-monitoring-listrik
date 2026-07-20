@@ -10,15 +10,20 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "nvs_flash.h"
+#include "esp_timer.h"
 
 #define WIFI_CONNECTED_BIT BIT0
 
-// Mitigasi brownout pada catu daya lemah: batasi daya pancar WiFi agar lonjakan
-// arus saat TX lebih kecil → drop tegangan berkurang → brownout reset lebih
-// jarang. Satuan 0.25 dBm; 44 = 11 dBm (turun dari default 20 dBm). Untuk soket
-// yang dekat router jangkauan tetap cukup. CATATAN: ini hanya mengurangi, BUKAN
-// pengganti catu daya 5V yang memadai (≥1A) + kapasitor bulk.
-#define WIFI_MANAGER_MAX_TX_POWER_QDBM 44
+// Daya pancar WiFi, satuan 0.25 dBm -> 80 = 20 dBm (penuh).
+// Sempat dipangkas ke 44 (11 dBm) demi meredam brownout pada catu daya lemah
+// (HLK-PM01 0,6A). Efek sampingnya merusak konektivitas: uplink ESP32->AP jadi
+// ~8x lebih lemah sehingga AP kerap menolak/melepas asosiasi (AUTH_EXPIRE /
+// ASSOC_FAIL / CONNECTION_FAIL) -> WiFi & MQTT putus-nyambung, NTP tak sync.
+// Catatan: RSSI bagus hanya menunjukkan DOWNLINK (AP->ESP32); uplink tetap
+// lemah bila TX ESP32 dipangkas. Setelah catu daya diganti 5V 2A (HLK-10M05),
+// daya pancar dikembalikan penuh. Jangan turunkan lagi kecuali catu daya lemah.
+#define WIFI_MANAGER_MAX_TX_POWER_QDBM 80
+#define WIFI_RECONNECT_DELAY_MS 3000U
 
 static const char *TAG = "wifi_manager";
 
@@ -34,6 +39,7 @@ static esp_event_handler_instance_t s_instance_any_id;
 static esp_event_handler_instance_t s_instance_got_ip;
 static wifi_manager_event_cb_t s_event_cb = NULL;
 static void *s_user_ctx = NULL;
+static esp_timer_handle_t s_reconnect_timer = NULL;  // timer jeda reconnect WiFi
 
 // Teruskan event level modul ke callback aplikasi.
 static void wifi_manager_publish_event(wifi_manager_event_t event, void *event_data)
@@ -66,35 +72,34 @@ static esp_err_t wifi_manager_validate_config(const wifi_manager_config_t *confi
 // Ubah kode alasan disconnect umum menjadi string agar log mudah dibaca.
 static const char *wifi_manager_disconnect_reason_to_string(wifi_err_reason_t reason)
 {
+    // CATATAN: WIFI_REASON_* adalah konstanta ENUM, bukan makro preprocessor.
+    // Membungkusnya dengan #ifdef membuat seluruh case ter-compile-out sehingga
+    // fungsi ini SELALU mengembalikan "UNKNOWN". Karena itu #ifdef dihapus.
     switch (reason) {
-#ifdef WIFI_REASON_AUTH_FAIL
-    case WIFI_REASON_AUTH_FAIL:
-        return "AUTH_FAIL";
-#endif
-#ifdef WIFI_REASON_NO_AP_FOUND
-    case WIFI_REASON_NO_AP_FOUND:
-        return "NO_AP_FOUND";
-#endif
-#ifdef WIFI_REASON_ASSOC_FAIL
-    case WIFI_REASON_ASSOC_FAIL:
-        return "ASSOC_FAIL";
-#endif
-#ifdef WIFI_REASON_HANDSHAKE_TIMEOUT
-    case WIFI_REASON_HANDSHAKE_TIMEOUT:
-        return "HANDSHAKE_TIMEOUT";
-#endif
-#ifdef WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT
+    case WIFI_REASON_UNSPECIFIED:
+        return "UNSPECIFIED";
+    case WIFI_REASON_AUTH_EXPIRE:
+        return "AUTH_EXPIRE";
+    case WIFI_REASON_AUTH_LEAVE:
+        return "AUTH_LEAVE";
+    case WIFI_REASON_ASSOC_EXPIRE:
+        return "ASSOC_EXPIRE";
+    case WIFI_REASON_ASSOC_LEAVE:
+        return "ASSOC_LEAVE";
     case WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT:
         return "4WAY_HANDSHAKE_TIMEOUT";
-#endif
-#ifdef WIFI_REASON_BEACON_TIMEOUT
     case WIFI_REASON_BEACON_TIMEOUT:
         return "BEACON_TIMEOUT";
-#endif
-#ifdef WIFI_REASON_CONNECTION_FAIL
+    case WIFI_REASON_NO_AP_FOUND:
+        return "NO_AP_FOUND";
+    case WIFI_REASON_AUTH_FAIL:
+        return "AUTH_FAIL";
+    case WIFI_REASON_ASSOC_FAIL:
+        return "ASSOC_FAIL";
+    case WIFI_REASON_HANDSHAKE_TIMEOUT:
+        return "HANDSHAKE_TIMEOUT";
     case WIFI_REASON_CONNECTION_FAIL:
         return "CONNECTION_FAIL";
-#endif
     default:
         return "UNKNOWN";
     }
@@ -119,6 +124,14 @@ static bool wifi_manager_should_retry_disconnect_reason(wifi_err_reason_t reason
     default:
         return true;
     }
+}
+
+// Callback timer reconnect: dieksekusi setelah jeda WIFI_RECONNECT_DELAY_MS,
+// bukan seketika saat disconnect, agar rel tegangan sempat pulih.
+static void wifi_manager_reconnect_timer_cb(void *arg)
+{
+    (void)arg;
+    esp_wifi_connect();
 }
 
 // Event handler utama untuk event WiFi dan IP.
@@ -152,18 +165,16 @@ static void wifi_manager_event_handler(
                 (unsigned int)reason);
 
             if (should_retry) {
-                // Reconnect SELAMANYA untuk gangguan transien (router reboot,
-                // sinyal hilang, AP sibuk). Percobaan di-pace oleh driver WiFi
-                // (event STA_DISCONNECTED baru muncul setelah timeout scan/assoc),
-                // jadi ini bukan busy-loop. Device tetap jalan lokal saat offline.
-                // max_retry kini hanya ambang verbositas log, bukan batas menyerah.
                 s_retry_count++;
                 s_state = WIFI_MANAGER_STATE_CONNECTING;
                 if (s_retry_count <= s_config.max_retry || (s_retry_count % 20U) == 0U) {
-                    ESP_LOGW(TAG, "wifi disconnected, reconnect attempt %u",
-                             (unsigned int)s_retry_count);
+                    ESP_LOGW(TAG, "wifi disconnected, reconnect attempt %u dalam %ums",
+                             (unsigned int)s_retry_count,
+                             (unsigned int)WIFI_RECONNECT_DELAY_MS);
                 }
-                esp_wifi_connect();
+                esp_timer_stop(s_reconnect_timer);  // batalkan jadwal lama bila ada
+                esp_timer_start_once(s_reconnect_timer,
+                                     (uint64_t)WIFI_RECONNECT_DELAY_MS * 1000ULL);
             } else {
                 // Alasan non-retryable (kredensial/asosiasi ditolak): hentikan
                 // agar tidak spam / kena lockout AP. Perlu re-provisioning.
@@ -184,6 +195,7 @@ static void wifi_manager_event_handler(
     }
 
     if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+        esp_timer_stop(s_reconnect_timer);  // sudah tersambung, batalkan jadwal reconnect
         s_retry_count = 0;
         s_state = WIFI_MANAGER_STATE_CONNECTED;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
@@ -249,6 +261,16 @@ esp_err_t wifi_manager_init(
         TAG,
         "register IP_EVENT handler failed");
 
+    // Timer satu-tembak untuk menjadwalkan percobaan reconnect dengan jeda.
+    const esp_timer_create_args_t reconnect_timer_args = {
+        .callback = &wifi_manager_reconnect_timer_cb,
+        .name     = "wifi_reconnect",
+    };
+    ESP_RETURN_ON_ERROR(
+        esp_timer_create(&reconnect_timer_args, &s_reconnect_timer),
+        TAG,
+        "create reconnect timer failed");
+
     memset(&s_config, 0, sizeof(s_config));
     s_config = *config;
 
@@ -293,13 +315,13 @@ esp_err_t wifi_manager_start(void)
     ESP_RETURN_ON_ERROR(esp_wifi_start(), TAG, "esp_wifi_start failed");
     s_started = true;
 
-    // Turunkan daya pancar WiFi setelah start (mitigasi brownout catu daya lemah).
-    // Non-fatal: kalau gagal, tetap lanjut dengan daya default.
+    // Set daya pancar WiFi setelah start. Non-fatal: bila gagal, tetap lanjut
+    // memakai daya default driver.
     esp_err_t tx_ret = esp_wifi_set_max_tx_power(WIFI_MANAGER_MAX_TX_POWER_QDBM);
     if (tx_ret != ESP_OK) {
         ESP_LOGW(TAG, "set max tx power gagal: %s", esp_err_to_name(tx_ret));
     } else {
-        ESP_LOGI(TAG, "wifi max tx power dibatasi ke %d (unit 0.25dBm = %.1f dBm)",
+        ESP_LOGI(TAG, "wifi max tx power = %d (unit 0.25dBm = %.1f dBm)",
                  WIFI_MANAGER_MAX_TX_POWER_QDBM, WIFI_MANAGER_MAX_TX_POWER_QDBM * 0.25f);
     }
 
@@ -316,6 +338,7 @@ esp_err_t wifi_manager_stop(void)
 
     ESP_RETURN_ON_ERROR(esp_wifi_stop(), TAG, "esp_wifi_stop failed");
     xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+    esp_timer_stop(s_reconnect_timer);  // hentikan jadwal reconnect saat wifi di-stop
 
     s_started = false;
     s_state = WIFI_MANAGER_STATE_IDLE;

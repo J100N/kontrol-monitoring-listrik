@@ -25,7 +25,6 @@ export interface SettingsValues {
   // Kontrol otomatis (parameter ini di-seed dari & dikirim ke perangkat)
   pirTimeout:      string;
   standbyThreshold:string;
-  overCurrent:     string;
   // Notifikasi
   notifyOffline:       boolean;
   notifyMonthlyTarget: boolean;
@@ -39,7 +38,6 @@ export const DEFAULT_SETTINGS: SettingsValues = {
   targetBulanan:   "250000",
   pirTimeout:      "600",
   standbyThreshold:"10",
-  overCurrent:     "6",
   notifyOffline:       true,
   notifyMonthlyTarget: true,
 };

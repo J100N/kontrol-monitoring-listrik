@@ -24,10 +24,11 @@ import type {
 /** Ubah ApiDevice (dari /api/devices) menjadi SmartDevice yang dipahami UI */
 export function adaptDevice(api: ApiDevice): SmartDevice {
   const t = api.latest_telemetry;
+  // Resolusi energi PZEM-004T = 1 Wh = 0,001 kWh → maksimal 3 desimal bermakna.
   const energyKwh = t
-    ? +(t.energy_wh / 1000).toFixed(2)
+    ? +(t.energy_wh / 1000).toFixed(3)
     : api.energy_total_wh != null
-    ? +(api.energy_total_wh / 1000).toFixed(2)
+    ? +(api.energy_total_wh / 1000).toFixed(3)
     : 0;
 
   // PZEM dipasang di sisi beban (setelah relay). Saat relay OFF, PZEM kehilangan
@@ -66,7 +67,7 @@ export function applyTelemetryPatch(
   if (t.power_w != null)   patch.power   = t.power_w;
   if (t.voltage_v != null) patch.voltage = t.voltage_v;
   if (t.current_a != null) patch.current = t.current_a;
-  if (t.energy_wh != null) patch.energy  = +(t.energy_wh / 1000).toFixed(2);
+  if (t.energy_wh != null) patch.energy  = +(t.energy_wh / 1000).toFixed(3);
   if (t.frequency_hz != null)  patch.frequency    = t.frequency_hz;
   if (t.power_factor != null)  patch.powerFactor  = t.power_factor;
   return patch;
@@ -140,9 +141,31 @@ const ACK_MESSAGE_MAP: Record<string, string> = {
 };
 
 /** Terjemahkan pesan event mentah menjadi kalimat yang mudah dipahami pengguna */
+// Label singkat & ramah-awam per jenis event. Menyembunyikan detail teknis/ID
+// mentah (mis. "command id=api-123 tidak menerima ack") agar log mudah dibaca.
+const EVENT_TYPE_LABELS: Record<string, string> = {
+  command_timeout:             "Perintah tidak direspons perangkat",
+  security_injection_rejected: "Payload tidak valid",
+  security_tamper_rejected:    "Verifikasi tag gagal",
+  // Catatan: TIDAK ada label replay TELEMETRI di sini. Penolakan ctr telemetri adalah
+  // dedup operasional (dominan: redelivery QoS 1 saat koneksi labil), bukan serangan —
+  // mencatatnya sbg serangan dulu membanjiri Log Keamanan dgn alarm palsu. Lihat
+  // telemetryHandler.js pada blok replayGuard.check.
+  // Penolakan perintah oleh firmware (dari ACK error) — event_type mengandung
+  // "reject" sehingga mapEventCategory memetakannya ke kategori SEC.
+  security_command_tamper_rejected:    "Perintah diubah ditolak",
+  security_command_injection_rejected: "Perintah tidak valid ditolak",
+  security_command_replay_rejected:    "Perintah lama dikirim ulang ditolak",
+};
+
 function humanizeEventMessage(e: ApiDeviceEvent): string {
   const raw = (e.message ?? "").trim();
   const key = raw.toLowerCase();
+
+  // 0) Label singkat berdasarkan jenis event (paling diprioritaskan)
+  if (EVENT_TYPE_LABELS[e.event_type ?? ""]) {
+    return EVENT_TYPE_LABELS[e.event_type ?? ""];
+  }
 
   // 1) Alasan aksi mode OTOMATIS (auto-control)
   if (AUTO_REASON_MAP[key]) return AUTO_REASON_MAP[key];

@@ -6,7 +6,7 @@
  * Pemetaan rentang waktu (UI → API):
  *   "24J" → "24h"   (24 jam terakhir, label per jam)
  *   "7H"  → "7d"    (7 hari terakhir, label per hari)
- *   "30H" → "7d"    (30 hari tidak didukung, fallback ke 7d)
+ *   "30H" → "30d"   (30 hari terakhir, label per beberapa hari)
  *
  * Data yang dikembalikan: DeviceDataPoint[] → { label: string, power: number }
  * Dipakai langsung sebagai data pada Recharts AreaChart di DeviceDetailPage.

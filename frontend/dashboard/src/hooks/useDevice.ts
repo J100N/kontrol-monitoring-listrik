@@ -87,11 +87,17 @@ export function useDevice(deviceId: string | undefined) {
           if (!prev) return prev;
           return {
             ...prev,
+            // Menerima telemetri = perangkat pasti hidup → tandai online segera
+            // (melengkapi cek kesegaran di backend agar transisi kembali instan).
+            status:         "online" as const,
             power:          power_w   ?? prev.power,
             voltage:        voltage_v ?? prev.voltage,
             current:        current_a ?? prev.current,
+            // Resolusi energi PZEM = 1 Wh = 0,001 kWh → 3 desimal (samakan
+            // dengan adaptDevice; toFixed(2) dulu membuat 2 Wh membulat ke 0
+            // sehingga kartu berkedip 2↔0 saat update WS tiba).
             energy:         energy_wh != null
-                              ? +(energy_wh / 1000).toFixed(2)
+                              ? +(energy_wh / 1000).toFixed(3)
                               : prev.energy,
             lastUpdateText: "Baru saja diperbarui",
           };

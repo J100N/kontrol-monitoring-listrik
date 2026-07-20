@@ -86,6 +86,49 @@ async function handleDeviceAckMessage({
     command_id: ack.command_id,
     latency_ms: matched?.latencyMs,
   });
+
+  // Jika ACK menandakan PENOLAKAN KRIPTO oleh perangkat (perintah palsu/diubah/
+  // replay dari penyerang gagal verifikasi ASCON), catat juga ke Log Keamanan —
+  // konsisten dengan pencatatan tampering pada jalur telemetri (monitoring). Ini
+  // adalah replay/tampering PERINTAH yang bermakna (mengendalikan aktuator).
+  // event_type mengandung "reject" agar dipetakan ke kategori SEC di dashboard.
+  // Tiga jenis penolakan yang dilaporkan firmware lewat ACK error:
+  //   - "format command"  → payload tidak valid  (injeksi)
+  //   - "decrypt command" → tag ASCON tidak cocok (palsu/diubah)
+  //   - "replay command"  → tag SAH tapi counter basi (replay)
+  // Yang terakhir penting dan mudah terlewat: envelope hasil rekaman punya tag ASCON
+  // yang SAH, jadi ia lolos dekripsi dan HANYA tertangkap oleh perbandingan counter di
+  // firmware. Tanpa cabang ini, ACK-nya jatuh ke command_ack biasa dan serangan replay
+  // tidak muncul sama sekali di Log Keamanan.
+  // event_type mengandung "reject" agar dipetakan ke kategori SEC di dashboard.
+  const ackMsg = (ack.message || "").toLowerCase();
+  const isInjection = ackMsg.includes("format command");
+  const isReplay    = ackMsg.includes("replay command");
+  const isTamper    = ackMsg.includes("decrypt command");
+  if (ack.status === "error" && (isInjection || isReplay || isTamper)) {
+    let eventType = "security_command_tamper_rejected";
+    let message   = "Perintah diubah ditolak";
+    if (isInjection) {
+      eventType = "security_command_injection_rejected";
+      message   = "Perintah tidak valid ditolak";
+    } else if (isReplay) {
+      eventType = "security_command_replay_rejected";
+      message   = "Perintah lama diputar ulang ditolak";
+    }
+    try {
+      await influxWriter.writeDeviceEvent({
+        device_id: deviceId,
+        event_type: eventType,
+        channel: "security",
+        status: "error",
+        message,
+        command_id: ack.command_id,
+        ts: Date.now(),
+      });
+    } catch (_err) {
+      // Best-effort: gagal menulis audit tidak boleh mengganggu alur ACK.
+    }
+  }
 }
 
 async function handleDeviceRelayStatusMessage({
